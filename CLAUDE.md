@@ -178,7 +178,7 @@ session_ended     Instructor ended the session
 Use a fixed set to keep the UI simple:
 
 ```
-👍  ❓  😂  🔥  ✅  😕
+👍  👎  ❓  😂  🔥  ✅  ❌  😊  😕
 ```
 
 Reactions are toggled: posting the same emoji twice removes it. Counts are aggregated server-side and broadcast via SSE `reaction_update` events.
@@ -252,12 +252,30 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Write `db/schema.sql` and `db/migrate.js` (runs automatically on startup)
 - [ ] Stub `server.js` — registers plugins, mounts routes, runs migration
 
+#### Verify Phase 0
+- [ ] `node server.js` starts without errors
+- [ ] SQLite file exists at `DB_PATH` after startup
+- [ ] All expected tables present: `sqlite3 data/chat.db ".tables"`
+- [ ] `curl http://localhost:3000/healthz` returns 200
+
 ### Phase 1 — Auth & sessions
 - [ ] `POST /instructor/login` — hash-compare PIN, return instructor JWT
 - [ ] `POST /session/start` — generate 4-digit PIN, insert session row, return PIN
 - [ ] `POST /session/end` — set `ended_at`, broadcast `session_ended` SSE event
 - [ ] `POST /join` — validate session PIN (session must be active), enforce username uniqueness per session, return student JWT
 - [ ] Fastify preHandler hooks to guard instructor vs. student routes
+
+#### Verify Phase 1
+- [ ] Wrong instructor PIN → 401: `curl -X POST localhost:3000/instructor/login -H "Content-Type: application/json" -d '{"pin":"000000"}'`
+- [ ] Correct instructor PIN → JWT returned
+- [ ] `POST /session/start` with instructor JWT → 4-digit PIN in response; row in `chat_sessions` table
+- [ ] `POST /join` with valid session PIN + username → student JWT returned
+- [ ] `POST /join` with same username again → 409 conflict
+- [ ] `POST /join` with wrong session PIN → 401
+- [ ] Student JWT rejected on instructor route: `POST /session/start` with student JWT → 403
+- [ ] Instructor JWT rejected on student route: `POST /message` with instructor JWT → 403
+- [ ] `POST /session/end` with instructor JWT → session row has `ended_at` set
+- [ ] `POST /join` on ended session → 403
 
 ### Phase 2 — Core chat
 - [ ] `lib/sse.js` — maintain a `Map` of `session_id → Set<response>`, expose `broadcast(session_id, event)`
@@ -266,15 +284,39 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] `POST /message` — insert message, broadcast `message_new`
 - [ ] Reply support — accept optional `parent_id`; validate it belongs to same session
 
+#### Verify Phase 2
+- [ ] Open SSE stream in terminal: `curl -N localhost:3000/stream -H "Authorization: Bearer <student_jwt>"` — connection stays open
+- [ ] Heartbeat comment (`: heartbeat`) appears in the SSE stream every 30s
+- [ ] `POST /message` with student JWT → message appears in SSE stream immediately
+- [ ] `GET /messages` returns the posted message with correct fields
+- [ ] Post a reply with `parent_id` set → appears in `GET /messages` under parent
+- [ ] Post a reply with a `parent_id` from a different session → 400/404
+- [ ] Closing the curl stream (Ctrl-C) → server removes client cleanly (no crash; confirm via server logs)
+
 ### Phase 3 — Reactions
 - [ ] `POST /react` — upsert/delete reaction (toggle), broadcast `reaction_update` with new counts for that message
 - [ ] Aggregate reaction counts in the `/messages` response
+
+#### Verify Phase 3
+- [ ] `POST /react` with `{message_id, emoji: "👍"}` → `reaction_update` event appears in SSE stream with count 1
+- [ ] Same request again (toggle off) → `reaction_update` event with count 0; row removed from `reactions` table
+- [ ] `GET /messages` includes reaction counts for each message
+- [ ] Two different users reacting with the same emoji → count 2; one toggles off → count 1
+- [ ] Invalid emoji (not in fixed set) → 400
 
 ### Phase 4 — Polls
 - [ ] `POST /poll` — insert poll, broadcast `poll_new` (options only, no vote counts)
 - [ ] `POST /vote` — insert vote (enforce UNIQUE constraint), return current vote count to instructor only
 - [ ] `POST /poll/:id/close` — set `closed_at`, broadcast `poll_closed` with full results
 - [ ] `/messages` and SSE events include active poll state for students joining mid-session
+
+#### Verify Phase 4
+- [ ] `POST /poll` with instructor JWT → `poll_new` event appears in SSE stream; event contains options but no vote counts
+- [ ] `POST /vote` with student JWT → vote recorded; second vote by same user → 409
+- [ ] Vote counts visible via instructor query before poll closes; not exposed to student JWT
+- [ ] `POST /poll/:id/close` → `poll_closed` event broadcast with full results including counts
+- [ ] New student joins after poll created but before close → `GET /messages` (or SSE connect) includes active poll
+- [ ] `POST /vote` on a closed poll → 400
 
 ### Phase 5 — Frontend (student)
 - [ ] Join screen: PIN + username form → store JWT in `localStorage`
@@ -285,6 +327,17 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Poll card: show options, submit vote, show "waiting for results" state, then show results bar chart on `poll_closed`
 - [ ] Reconnect: on load, check `localStorage` for JWT; re-fetch last 50 messages; re-establish SSE
 
+#### Verify Phase 5
+- [ ] Join screen: wrong PIN shows error message; correct PIN + username advances to chat
+- [ ] JWT and username present in `localStorage` after join (check via browser DevTools → Application)
+- [ ] Post a message via curl → appears in browser without page reload
+- [ ] React to a message → count updates immediately; click again → toggles off
+- [ ] Expand reply thread → replies appear inline
+- [ ] Create a poll via curl → voting card appears; vote → card shows "waiting for results"
+- [ ] Close poll via curl → results bar chart appears
+- [ ] Hard-reload the page → chat feed restores last 50 messages; SSE reconnects (check Network tab)
+- [ ] End session via curl → student UI shows session-ended state
+
 ### Phase 6 — Frontend (instructor dashboard)
 - [ ] Login screen → dashboard
 - [ ] Session PIN displayed prominently with copy button
@@ -294,6 +347,16 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] End session button (with confirmation)
 - [ ] Export log button — downloads JSON for current session
 
+#### Verify Phase 6
+- [ ] Wrong instructor PIN shows error; correct PIN advances to dashboard
+- [ ] "Start Session" displays a 4-digit PIN; copy button copies it to clipboard
+- [ ] Student posts a message via a second browser tab → appears in instructor feed with timestamp
+- [ ] Create poll → poll card appears in dashboard with live vote counts
+- [ ] Student votes → count increments in instructor view without reload
+- [ ] Close poll → student view shows results; instructor panel reflects closed state
+- [ ] "End Session" button requires confirmation before firing
+- [ ] Export log downloads valid JSON containing all messages, replies, reactions, and poll results for the session
+
 ### Phase 7 — Hardening
 - [ ] Rate limiting via `@fastify/rate-limit` (per IP, per route)
 - [ ] Username conflict handling — reject duplicate usernames in same session with a clear error
@@ -301,11 +364,24 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Validate all inputs (message length cap, poll option count, etc.)
 - [ ] Ensure `DB_PATH` directory exists on startup; log a clear error if volume isn't persistent
 
+#### Verify Phase 7
+- [ ] Rapid-fire 20 `POST /message` requests → rate limiter returns 429 after threshold
+- [ ] Message body exceeding length cap → 400 with descriptive error
+- [ ] Poll with 5 options → 400; poll with 1 option → 400
+- [ ] Kill the server mid-SSE-stream, restart it → client reconnects automatically (observe in browser Network tab)
+- [ ] Start server with `DB_PATH` pointing to a non-existent directory → clear error logged, process exits
+
 ### Phase 8 — Deployment
 - [ ] Write `railway.toml` or `render.yaml` config
 - [ ] Document persistent disk volume setup (mount at `/data`, set `DB_PATH=/data/chat.db`)
 - [ ] Add a `/healthz` route for uptime monitoring
 - [ ] README with: local dev setup, env vars, deployment steps, how to run a session
+
+#### Verify Phase 8
+- [ ] Push to Railway/Render → deploy succeeds with no build errors
+- [ ] `curl https://<deployed-url>/healthz` → 200
+- [ ] Full happy path on production URL: instructor login → start session → student join → message → react → poll → end session
+- [ ] Redeploy (push a trivial commit) → chat history still present after redeploy (confirms persistent volume is working)
 
 ---
 
