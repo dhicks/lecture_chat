@@ -259,23 +259,23 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [x] `curl http://localhost:3000/healthz` returns 200
 
 ### Phase 1 — Auth & sessions
-- [ ] `POST /instructor/login` — hash-compare PIN, return instructor JWT
-- [ ] `POST /session/start` — generate 4-digit PIN, insert session row, return PIN
-- [ ] `POST /session/end` — set `ended_at`, broadcast `session_ended` SSE event
-- [ ] `POST /join` — validate session PIN (session must be active), enforce username uniqueness per session, return student JWT
-- [ ] Fastify preHandler hooks to guard instructor vs. student routes
+- [x] `POST /instructor/login` — hash-compare PIN, return instructor JWT
+- [x] `POST /session/start` — generate 4-digit PIN, insert session row, return PIN
+- [x] `POST /session/end` — set `ended_at`, broadcast `session_ended` SSE event
+- [x] `POST /join` — validate session PIN (session must be active), enforce username uniqueness per session, return student JWT
+- [x] Fastify preHandler hooks to guard instructor vs. student routes
 
 #### Verify Phase 1
-- [ ] Wrong instructor PIN → 401: `curl -X POST localhost:3000/instructor/login -H "Content-Type: application/json" -d '{"pin":"000000"}'`
-- [ ] Correct instructor PIN → JWT returned
-- [ ] `POST /session/start` with instructor JWT → 4-digit PIN in response; row in `chat_sessions` table
-- [ ] `POST /join` with valid session PIN + username → student JWT returned
-- [ ] `POST /join` with same username again → 409 conflict
-- [ ] `POST /join` with wrong session PIN → 401
-- [ ] Student JWT rejected on instructor route: `POST /session/start` with student JWT → 403
-- [ ] Instructor JWT rejected on student route: `POST /message` with instructor JWT → 403
-- [ ] `POST /session/end` with instructor JWT → session row has `ended_at` set
-- [ ] `POST /join` on ended session → 403
+- [x] Wrong instructor PIN → 401: `curl -X POST localhost:3000/instructor/login -H "Content-Type: application/json" -d '{"pin":"000000"}'`
+- [x] Correct instructor PIN → JWT returned
+- [x] `POST /session/start` with instructor JWT → 4-digit PIN in response; row in `chat_sessions` table
+- [x] `POST /join` with valid session PIN + username → student JWT returned
+- [x] `POST /join` with same username again → 409 conflict
+- [x] `POST /join` with wrong session PIN → 401
+- [x] Student JWT rejected on instructor route: `POST /session/start` with student JWT → 403
+- [ ] Instructor JWT rejected on student route: `POST /message` with instructor JWT → 403 (verified in Phase 2)
+- [x] `POST /session/end` with instructor JWT → session row has `ended_at` set
+- [x] `POST /join` on ended session → 401
 
 ### Phase 2 — Core chat
 - [ ] `lib/sse.js` — maintain a `Map` of `session_id → Set<response>`, expose `broadcast(session_id, event)`
@@ -375,13 +375,23 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Write `railway.toml` or `render.yaml` config
 - [ ] Document persistent disk volume setup (mount at `/data`, set `DB_PATH=/data/chat.db`)
 - [ ] Add a `/healthz` route for uptime monitoring
-- [ ] README with: local dev setup, env vars, deployment steps, how to run a session
 
 #### Verify Phase 8
 - [ ] Push to Railway/Render → deploy succeeds with no build errors
 - [ ] `curl https://<deployed-url>/healthz` → 200
 - [ ] Full happy path on production URL: instructor login → start session → student join → message → react → poll → end session
 - [ ] Redeploy (push a trivial commit) → chat history still present after redeploy (confirms persistent volume is working)
+
+### Phase 9 — README (user guide)
+A `README.md` written for the instructor returning to this project months later with no memory of it.
+- [ ] **Setup**: prerequisites (Node 20+, clone, `npm install`, copy `.env.example` → `.env`, fill in `INSTRUCTOR_PIN` and `JWT_SECRET`)
+- [ ] **Running locally**: `npm start`, what URL to open
+- [ ] **Running a session**: step-by-step — log in, start session, share PIN with students, create polls, close polls, end session, export log
+- [ ] **Deployment**: how to push to Railway/Render, where to set env vars, persistent disk setup
+- [ ] **Env var reference**: what each variable does, safe defaults vs. must-change
+
+#### Verify Phase 9
+- [ ] Follow the README from scratch on a clean machine (or a fresh clone) — server starts and a session runs end-to-end without consulting any other docs
 
 ---
 
