@@ -247,16 +247,16 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 ## TODO
 
 ### Phase 0 — Project setup
-- [ ] `npm init`, install dependencies: `fastify`, `better-sqlite3`, `@fastify/jwt`, `@fastify/static`, `@fastify/cookie`, `bcrypt`
-- [ ] Create `.env` with `INSTRUCTOR_PIN`, `JWT_SECRET`, `PORT`, `DB_PATH`
-- [ ] Write `db/schema.sql` and `db/migrate.js` (runs automatically on startup)
-- [ ] Stub `server.js` — registers plugins, mounts routes, runs migration
+- [x] `npm init`, install dependencies: `fastify`, `better-sqlite3`, `@fastify/jwt`, `@fastify/static`, `@fastify/cookie`, `bcrypt`
+- [x] Create `.env` with `INSTRUCTOR_PIN`, `JWT_SECRET`, `PORT`, `DB_PATH`
+- [x] Write `db/schema.sql` and `db/migrate.js` (runs automatically on startup)
+- [x] Stub `server.js` — registers plugins, mounts routes, runs migration
 
 #### Verify Phase 0
-- [ ] `node server.js` starts without errors
-- [ ] SQLite file exists at `DB_PATH` after startup
-- [ ] All expected tables present: `sqlite3 data/chat.db ".tables"`
-- [ ] `curl http://localhost:3000/healthz` returns 200
+- [x] `node server.js` starts without errors
+- [x] SQLite file exists at `DB_PATH` after startup
+- [x] All expected tables present: `sqlite3 data/chat.db ".tables"`
+- [x] `curl http://localhost:3000/healthz` returns 200
 
 ### Phase 1 — Auth & sessions
 - [ ] `POST /instructor/login` — hash-compare PIN, return instructor JWT
