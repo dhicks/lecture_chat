@@ -20,7 +20,7 @@ async function pollRoutes(app) {
       return reply.code(400).send({ error: 'each option must be a non-empty string' });
     }
 
-    const session = db.prepare('SELECT id FROM chat_sessions WHERE ended_at IS NULL').get();
+    const session = db.prepare('SELECT id FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
     if (!session) return reply.code(404).send({ error: 'No active session' });
 
     const result = db.prepare(

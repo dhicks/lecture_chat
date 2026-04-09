@@ -95,6 +95,9 @@ STATUS=$(http POST "$BASE/session/start" -H "Authorization: Bearer $INST")
 check "session/start → 200" "200" "$STATUS"
 PIN=$(jq -r .session_pin "$BODY")
 SESSION_ID=$(jq -r .session_id "$BODY")
+
+STATUS=$(http POST "$BASE/session/start" -H "Authorization: Bearer $INST")
+check "second session/start while one active → 409" "409" "$STATUS"
 [[ "$PIN" =~ ^[0-9]{4}$ ]] \
   && echo "PASS: 4-digit PIN returned ($PIN)" \
   || { echo "FAIL: PIN not 4 digits ($PIN)"; FAILURES=$((FAILURES + 1)); }
@@ -106,7 +109,11 @@ STU_ALICE=$(jq -r .token "$BODY")
 
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
   -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
-check "/join duplicate username → 409" "409" "$STATUS"
+check "/join duplicate username (rejoin) → 200" "200" "$STATUS"
+REJOIN_TOKEN=$(jq -r .token "$BODY")
+[[ -n "$REJOIN_TOKEN" && "$REJOIN_TOKEN" != "null" ]] \
+  && echo "PASS: rejoin issues a fresh JWT" \
+  || { echo "FAIL: rejoin did not return a JWT"; FAILURES=$((FAILURES + 1)); }
 
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
   -d '{"session_pin":"0000","username":"nobody"}')
@@ -168,17 +175,9 @@ STATUS=$(http GET "$BASE/messages" -H "Authorization: Bearer $STU_ALICE")
 REPLY_FOUND=$(jq -r ".messages[] | select(.id == $MSG_ID) | .replies[] | select(.id == $REPLY_ID) | .id" "$BODY")
 check "reply grouped under parent in GET /messages" "$REPLY_ID" "$REPLY_FOUND"
 
-# cross-session: create a second session and get a message id from it
-STATUS2=$(http POST "$BASE/instructor/login" -H "Content-Type: application/json" -d '{"pin":"123456"}')
-INST2=$(jq -r .token "$BODY")
-http POST "$BASE/session/start" -H "Authorization: Bearer $INST2" >/dev/null
-PIN2=$(jq -r .session_pin "$BODY")
-http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN2\",\"username\":\"charlie\"}" >/dev/null
-STU_CHARLIE=$(jq -r .token "$BODY")
-http POST "$BASE/message" -H "Authorization: Bearer $STU_CHARLIE" \
-  -H "Content-Type: application/json" -d '{"body":"other session"}' >/dev/null
-OTHER_MSG_ID=$(jq -r .message.id "$BODY")
+# cross-session: insert a message directly in a fake session
+OTHER_MSG_ID=$(sqlite3 data/chat.db \
+  "INSERT INTO messages (session_id, username, body) VALUES (9999, 'ghost', 'other session'); SELECT last_insert_rowid();")
 
 STATUS=$(http POST "$BASE/message" -H "Authorization: Bearer $STU_ALICE" \
   -H "Content-Type: application/json" \
@@ -333,8 +332,6 @@ check "mid-session joiner sees active_poll" "$POLL2_ID" "$AP2_ID"
 echo ""
 echo "── Phase 1: session end ───────────────────────────────────────────────────"
 
-# end session 2 (charlie's) first — doesn't affect our primary session
-http POST "$BASE/session/start" -H "Authorization: Bearer $INST" >/dev/null  # ignored, already ended
 STATUS=$(http POST "$BASE/session/end" -H "Authorization: Bearer $INST")
 check "POST /session/end → 200" "200" "$STATUS"
 sleep 0.3
@@ -349,6 +346,14 @@ check "session row has ended_at set" "1" "$ENDED"
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
   -d "{\"session_pin\":\"$PIN\",\"username\":\"latecomer\"}")
 check "/join on ended session → 401" "401" "$STATUS"
+
+STATUS=$(http POST "$BASE/message" -H "Authorization: Bearer $STU_ALICE" \
+  -H "Content-Type: application/json" -d '{"body":"ghost message"}')
+check "POST /message after session ends → 403" "403" "$STATUS"
+
+STATUS=$(http POST "$BASE/react" -H "Authorization: Bearer $STU_ALICE" \
+  -H "Content-Type: application/json" -d "{\"message_id\":$MSG_ID,\"emoji\":\"👍\"}")
+check "POST /react after session ends → 403" "403" "$STATUS"
 
 echo "(skipping: SSE cleanup on disconnect — manual verification required)"
 

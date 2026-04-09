@@ -8,6 +8,9 @@ async function sessionRoutes(app) {
   app.post('/start', { preHandler: requireInstructor }, async (req, reply) => {
     const db = app.db;
 
+    const existing = db.prepare('SELECT id FROM chat_sessions WHERE ended_at IS NULL').get();
+    if (existing) return reply.code(409).send({ error: 'A session is already active', session_id: existing.id });
+
     // Generate a 4-digit PIN not already in use by an active session
     let session_pin;
     do {

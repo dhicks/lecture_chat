@@ -17,7 +17,8 @@ async function streamRoutes(app) {
     addClient(session_id, reply);
 
     const heartbeat = setInterval(() => {
-      reply.raw.write(': heartbeat\n\n');
+      try { reply.raw.write(': heartbeat\n\n'); }
+      catch { clearInterval(heartbeat); removeClient(session_id, reply); }
     }, 30_000);
 
     req.raw.on('close', () => {

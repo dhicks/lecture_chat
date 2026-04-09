@@ -19,8 +19,9 @@ if (!INSTRUCTOR_PIN) {
   console.error('ERROR: INSTRUCTOR_PIN env var is required');
   process.exit(1);
 }
-if (!JWT_SECRET || JWT_SECRET === 'changeme_replace_with_random_string') {
-  console.warn('WARNING: JWT_SECRET is not set or is using the default value');
+if (!JWT_SECRET) {
+  console.error('ERROR: JWT_SECRET env var is required');
+  process.exit(1);
 }
 
 // Ensure data directory exists

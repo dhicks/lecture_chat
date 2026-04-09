@@ -87,6 +87,9 @@ async function messageRoutes(app) {
     const { body, parent_id } = req.body || {};
     const db = app.db;
 
+    const session = db.prepare('SELECT ended_at FROM chat_sessions WHERE id = ?').get(session_id);
+    if (!session || session.ended_at) return reply.code(403).send({ error: 'Session has ended' });
+
     if (!body || typeof body !== 'string' || body.trim().length === 0) {
       return reply.code(400).send({ error: 'body is required' });
     }
