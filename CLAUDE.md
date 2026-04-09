@@ -273,25 +273,25 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [x] `POST /join` with same username again → 409 conflict
 - [x] `POST /join` with wrong session PIN → 401
 - [x] Student JWT rejected on instructor route: `POST /session/start` with student JWT → 403
-- [ ] Instructor JWT rejected on student route: `POST /message` with instructor JWT → 403 (verified in Phase 2)
+- [x] Instructor JWT rejected on student route: `POST /message` with instructor JWT → 403 (verified in Phase 2)
 - [x] `POST /session/end` with instructor JWT → session row has `ended_at` set
 - [x] `POST /join` on ended session → 401
 
 ### Phase 2 — Core chat
-- [ ] `lib/sse.js` — maintain a `Map` of `session_id → Set<response>`, expose `broadcast(session_id, event)`
-- [ ] `GET /stream` — register client in SSE map, send heartbeat every 30s, clean up on close
-- [ ] `GET /messages` — return last 50 messages for session (with reply counts and reaction counts)
-- [ ] `POST /message` — insert message, broadcast `message_new`
-- [ ] Reply support — accept optional `parent_id`; validate it belongs to same session
+- [x] `lib/sse.js` — maintain a `Map` of `session_id → Set<response>`, expose `broadcast(session_id, event)`
+- [x] `GET /stream` — register client in SSE map, send heartbeat every 30s, clean up on close
+- [x] `GET /messages` — return last 50 messages for session (with reply counts and reaction counts)
+- [x] `POST /message` — insert message, broadcast `message_new`
+- [x] Reply support — accept optional `parent_id`; validate it belongs to same session
 
 #### Verify Phase 2
-- [ ] Open SSE stream in terminal: `curl -N localhost:3000/stream -H "Authorization: Bearer <student_jwt>"` — connection stays open
-- [ ] Heartbeat comment (`: heartbeat`) appears in the SSE stream every 30s
-- [ ] `POST /message` with student JWT → message appears in SSE stream immediately
-- [ ] `GET /messages` returns the posted message with correct fields
-- [ ] Post a reply with `parent_id` set → appears in `GET /messages` under parent
-- [ ] Post a reply with a `parent_id` from a different session → 400/404
-- [ ] Closing the curl stream (Ctrl-C) → server removes client cleanly (no crash; confirm via server logs)
+- [x] Open SSE stream in terminal: `curl -N localhost:3000/stream -H "Authorization: Bearer <student_jwt>"` — connection stays open
+- [x] Heartbeat comment (`: heartbeat`) appears in the SSE stream every 30s
+- [x] `POST /message` with student JWT → message appears in SSE stream immediately
+- [x] `GET /messages` returns the posted message with correct fields
+- [x] Post a reply with `parent_id` set → appears in `GET /messages` under parent
+- [x] Post a reply with a `parent_id` from a different session → 400/404
+- [x] Closing the curl stream (Ctrl-C) → server removes client cleanly (no crash; confirm via server logs)
 
 ### Phase 3 — Reactions
 - [ ] `POST /react` — upsert/delete reaction (toggle), broadcast `reaction_update` with new counts for that message
