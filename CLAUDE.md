@@ -294,15 +294,15 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [x] Closing the curl stream (Ctrl-C) → server removes client cleanly (no crash; confirm via server logs)
 
 ### Phase 3 — Reactions
-- [ ] `POST /react` — upsert/delete reaction (toggle), broadcast `reaction_update` with new counts for that message
-- [ ] Aggregate reaction counts in the `/messages` response
+- [x] `POST /react` — upsert/delete reaction (toggle), broadcast `reaction_update` with new counts for that message
+- [x] Aggregate reaction counts in the `/messages` response
 
 #### Verify Phase 3
-- [ ] `POST /react` with `{message_id, emoji: "👍"}` → `reaction_update` event appears in SSE stream with count 1
-- [ ] Same request again (toggle off) → `reaction_update` event with count 0; row removed from `reactions` table
-- [ ] `GET /messages` includes reaction counts for each message
-- [ ] Two different users reacting with the same emoji → count 2; one toggles off → count 1
-- [ ] Invalid emoji (not in fixed set) → 400
+- [x] `POST /react` with `{message_id, emoji: "👍"}` → `reaction_update` event appears in SSE stream with count 1
+- [x] Same request again (toggle off) → `reaction_update` event with count 0; row removed from `reactions` table
+- [x] `GET /messages` includes reaction counts for each message
+- [x] Two different users reacting with the same emoji → count 2; one toggles off → count 1
+- [x] Invalid emoji (not in fixed set) → 400
 
 ### Phase 4 — Polls
 - [ ] `POST /poll` — insert poll, broadcast `poll_new` (options only, no vote counts)
