@@ -65,6 +65,9 @@ async function pollRoutes(app) {
     const { poll_id, choice } = req.body || {};
     const db = app.db;
 
+    const session = db.prepare('SELECT ended_at FROM chat_sessions WHERE id = ?').get(session_id);
+    if (!session || session.ended_at) return reply.code(403).send({ error: 'Session has ended' });
+
     if (poll_id == null || !Number.isInteger(Number(poll_id))) {
       return reply.code(400).send({ error: 'poll_id is required' });
     }

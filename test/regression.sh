@@ -355,6 +355,10 @@ STATUS=$(http POST "$BASE/react" -H "Authorization: Bearer $STU_ALICE" \
   -H "Content-Type: application/json" -d "{\"message_id\":$MSG_ID,\"emoji\":\"👍\"}")
 check "POST /react after session ends → 403" "403" "$STATUS"
 
+STATUS=$(http POST "$BASE/vote" -H "Authorization: Bearer $STU_ALICE" \
+  -H "Content-Type: application/json" -d "{\"poll_id\":$POLL2_ID,\"choice\":0}")
+check "POST /vote after session ends → 403" "403" "$STATUS"
+
 echo "(skipping: SSE cleanup on disconnect — manual verification required)"
 
 # ── Summary ────────────────────────────────────────────────────────────────────
