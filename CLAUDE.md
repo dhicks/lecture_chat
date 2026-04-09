@@ -305,18 +305,18 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [x] Invalid emoji (not in fixed set) → 400
 
 ### Phase 4 — Polls
-- [ ] `POST /poll` — insert poll, broadcast `poll_new` (options only, no vote counts)
-- [ ] `POST /vote` — insert vote (enforce UNIQUE constraint), return current vote count to instructor only
-- [ ] `POST /poll/:id/close` — set `closed_at`, broadcast `poll_closed` with full results
-- [ ] `/messages` and SSE events include active poll state for students joining mid-session
+- [x] `POST /poll` — insert poll, broadcast `poll_new` (options only, no vote counts)
+- [x] `POST /vote` — insert vote (enforce UNIQUE constraint), return current vote count to instructor only
+- [x] `POST /poll/:id/close` — set `closed_at`, broadcast `poll_closed` with full results
+- [x] `/messages` and SSE events include active poll state for students joining mid-session
 
 #### Verify Phase 4
-- [ ] `POST /poll` with instructor JWT → `poll_new` event appears in SSE stream; event contains options but no vote counts
-- [ ] `POST /vote` with student JWT → vote recorded; second vote by same user → 409
-- [ ] Vote counts visible via instructor query before poll closes; not exposed to student JWT
-- [ ] `POST /poll/:id/close` → `poll_closed` event broadcast with full results including counts
-- [ ] New student joins after poll created but before close → `GET /messages` (or SSE connect) includes active poll
-- [ ] `POST /vote` on a closed poll → 400
+- [x] `POST /poll` with instructor JWT → `poll_new` event appears in SSE stream; event contains options but no vote counts
+- [x] `POST /vote` with student JWT → vote recorded; second vote by same user → 409
+- [x] Vote counts visible via instructor query before poll closes; not exposed to student JWT
+- [x] `POST /poll/:id/close` → `poll_closed` event broadcast with full results including counts
+- [x] New student joins after poll created but before close → `GET /messages` (or SSE connect) includes active poll
+- [x] `POST /vote` on a closed poll → 400
 
 ### Phase 5 — Frontend (student)
 - [ ] Join screen: PIN + username form → store JWT in `localStorage`

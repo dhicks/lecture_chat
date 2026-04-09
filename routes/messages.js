@@ -16,7 +16,17 @@ async function messageRoutes(app) {
       ORDER BY created_at DESC LIMIT 50
     `).all(session_id).reverse();
 
-    if (topLevel.length === 0) return reply.send({ messages: [] });
+    if (topLevel.length === 0) {
+      const emptyPollRow = db.prepare(`
+        SELECT id, prompt, options FROM polls
+        WHERE session_id = ? AND closed_at IS NULL
+        ORDER BY created_at DESC LIMIT 1
+      `).get(session_id);
+      const active_poll = emptyPollRow
+        ? { id: emptyPollRow.id, prompt: emptyPollRow.prompt, options: JSON.parse(emptyPollRow.options) }
+        : null;
+      return reply.send({ messages: [], active_poll });
+    }
 
     const topIds = topLevel.map(m => m.id);
     const placeholders = topIds.map(() => '?').join(',');
@@ -58,7 +68,17 @@ async function messageRoutes(app) {
       replies: repliesMap[m.id] || [],
     }));
 
-    return reply.send({ messages });
+    const activePollRow = db.prepare(`
+      SELECT id, prompt, options FROM polls
+      WHERE session_id = ? AND closed_at IS NULL
+      ORDER BY created_at DESC LIMIT 1
+    `).get(session_id);
+
+    const active_poll = activePollRow
+      ? { id: activePollRow.id, prompt: activePollRow.prompt, options: JSON.parse(activePollRow.options) }
+      : null;
+
+    return reply.send({ messages, active_poll });
   });
 
   // POST /message — post a new message or reply
