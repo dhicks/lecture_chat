@@ -326,6 +326,14 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Reply thread toggle — "N replies" expands inline
 - [ ] Poll card: show options, submit vote, show "waiting for results" state, then show results bar chart on `poll_closed`
 - [ ] Reconnect: on load, check `localStorage` for JWT; re-fetch last 50 messages; re-establish SSE
+- [ ] **A11y**: semantic HTML throughout — `<main>`, `<header>`, `<section>`, `<form>`, real `<button>` elements, `<label>` for every input
+- [ ] **A11y**: message feed has `aria-live="polite"` so new messages are announced to screen readers without stealing focus
+- [ ] **A11y**: `session_ended` and error alerts use `aria-live="assertive"` (urgent, interrupts)
+- [ ] **A11y**: emoji reaction buttons have descriptive `aria-label` (e.g., `"Thumbs up, 3 reactions"`) and `aria-pressed` for toggle state
+- [ ] **A11y**: poll rendered as `<fieldset>`/`<legend>`/`<input type="radio">` group; vote confirmation announced via live region
+- [ ] **A11y**: reply thread toggle button has `aria-expanded` and `aria-controls` pointing to the reply list
+- [ ] **A11y**: after join form submits, move focus to the message input
+- [ ] **A11y**: verify color contrast meets WCAG AA (timestamps and reaction counts are common failure points with Pico.css)
 
 #### Verify Phase 5
 - [ ] Join screen: wrong PIN shows error message; correct PIN + username advances to chat
@@ -337,6 +345,9 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Close poll via curl → results bar chart appears
 - [ ] Hard-reload the page → chat feed restores last 50 messages; SSE reconnects (check Network tab)
 - [ ] End session via curl → student UI shows session-ended state
+- [ ] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
+- [ ] **A11y**: run with a screen reader (VoiceOver on macOS or NVDA on Windows) — new messages announced, reactions announced, poll announced, session-end announced
+- [ ] **A11y**: check all pages with browser accessibility inspector (Chrome DevTools → Lighthouse or axe extension) — zero critical violations
 
 ### Phase 6 — Frontend (instructor dashboard)
 - [ ] Login screen → dashboard
@@ -346,6 +357,10 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Active poll panel: live vote counts (visible to instructor before close), close button
 - [ ] End session button (with confirmation)
 - [ ] Export log button — downloads JSON for current session
+- [ ] **A11y**: same semantic HTML and live region requirements as student frontend
+- [ ] **A11y**: live vote count updates announced via `aria-live="polite"` region (not the count inline, which would be too noisy — a summary region)
+- [ ] **A11y**: "End Session" confirmation dialog is a proper `<dialog>` element with focus trapped inside and returned to trigger button on dismiss
+- [ ] **A11y**: poll results bar chart has a text/table alternative (e.g., visually-hidden `<table>` or `aria-label` with percentages on each bar)
 
 #### Verify Phase 6
 - [ ] Wrong instructor PIN shows error; correct PIN advances to dashboard
@@ -356,6 +371,9 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 - [ ] Close poll → student view shows results; instructor panel reflects closed state
 - [ ] "End Session" button requires confirmation before firing
 - [ ] Export log downloads valid JSON containing all messages, replies, reactions, and poll results for the session
+- [ ] **A11y**: navigate the full instructor flow using only a keyboard — no mouse required
+- [ ] **A11y**: "End Session" confirmation dialog traps focus; Escape dismisses and returns focus to the button
+- [ ] **A11y**: poll results bar chart is interpretable without sight (check via screen reader or axe)
 
 ### Phase 7 — Hardening
 - [ ] Rate limiting via `@fastify/rate-limit` (per IP, per route)
@@ -403,3 +421,17 @@ A `README.md` written for the instructor returning to this project months later 
 - **JWT expiry** — student tokens can expire after 4 hours (reasonable lecture window). Instructor tokens after 8 hours.
 - **No message deletion** — keep it simple; logs should be complete. Instructor can pin but not delete.
 - **Session PIN collisions** — on `session/start`, check that the generated PIN isn't already in use by another active session (unlikely but possible).
+
+### Accessibility (legal requirement — WCAG 2.1 AA)
+
+The system must be usable by someone on a screen reader. Key patterns:
+
+- **ARIA live regions** — the message feed uses `aria-live="polite"`; urgent alerts (session ended, errors) use `aria-live="assertive"`. Never put high-frequency updates (individual reaction counts) directly in a live region — collect them into a summary.
+- **Emoji reaction buttons** — raw emoji are read inconsistently across screen readers. Always provide `aria-label` with a plain-English description and count (e.g., `aria-label="Thumbs up, 3 reactions"`), plus `aria-pressed` for toggle state.
+- **Polls** — use `<fieldset>` + `<legend>` (poll prompt) + `<input type="radio">` for options. Never render a poll as a custom widget.
+- **Poll results bar chart** — the visual bar chart must have a screen-reader-accessible alternative: either a visually-hidden `<table>` with the same data, or `aria-label` attributes on each bar that include the option text and percentage.
+- **Reply thread toggle** — `aria-expanded` on the toggle button; `aria-controls` pointing to the reply list `id`.
+- **Confirmation dialogs** — use the native `<dialog>` element. Trap focus inside while open; return focus to the trigger button on close.
+- **Focus management** — after form submission advances the user to a new screen (join → chat), programmatically move focus to the first meaningful element (message input).
+- **Semantic structure** — use landmark elements (`<main>`, `<header>`, `<nav>`, `<section>`) and real interactive elements (`<button>`, `<input>`, `<label>`). No `<div onclick>`.
+- **Color contrast** — Pico.css defaults often fail WCAG AA for muted text (timestamps, counts). Override as needed. Do not rely on color alone to convey state.
