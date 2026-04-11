@@ -47,16 +47,6 @@ async function authRoutes(app) {
       db.prepare('INSERT INTO session_users (session_id, username) VALUES (?, ?)').run(session.id, username);
     } catch (err) {
       if (err.message.includes('UNIQUE constraint failed')) {
-        const existing = db.prepare(
-          'SELECT id FROM session_users WHERE session_id = ? AND username = ?'
-        ).get(session.id, username);
-        if (existing) {
-          const token = app.jwt.sign(
-            { role: 'student', session_id: session.id, username },
-            { expiresIn: '4h' }
-          );
-          return { token };
-        }
         return reply.code(409).send({ error: 'Username already taken in this session' });
       }
       throw err;

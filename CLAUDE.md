@@ -244,172 +244,22 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 
 ---
 
-## TODO
+## Development Phases
 
-### Phase 0 — Project setup
-- [x] `npm init`, install dependencies: `fastify`, `better-sqlite3`, `@fastify/jwt`, `@fastify/static`, `@fastify/cookie`, `bcrypt`
-- [x] Create `.env` with `INSTRUCTOR_PIN`, `JWT_SECRET`, `PORT`, `DB_PATH`
-- [x] Write `db/schema.sql` and `db/migrate.js` (runs automatically on startup)
-- [x] Stub `server.js` — registers plugins, mounts routes, runs migration
+Phases 0–4 are complete. Outstanding work is tracked in `TODO.md`.
 
-#### Verify Phase 0
-- [x] `node server.js` starts without errors
-- [x] SQLite file exists at `DB_PATH` after startup
-- [x] All expected tables present: `sqlite3 data/chat.db ".tables"`
-- [x] `curl http://localhost:3000/healthz` returns 200
-
-### Phase 1 — Auth & sessions
-- [x] `POST /instructor/login` — hash-compare PIN, return instructor JWT
-- [x] `POST /session/start` — generate 4-digit PIN, insert session row, return PIN
-- [x] `POST /session/end` — set `ended_at`, broadcast `session_ended` SSE event
-- [x] `POST /join` — validate session PIN (session must be active), enforce username uniqueness per session, return student JWT
-- [x] Fastify preHandler hooks to guard instructor vs. student routes
-
-#### Verify Phase 1
-- [x] Wrong instructor PIN → 401: `curl -X POST localhost:3000/instructor/login -H "Content-Type: application/json" -d '{"pin":"000000"}'`
-- [x] Correct instructor PIN → JWT returned
-- [x] `POST /session/start` with instructor JWT → 4-digit PIN in response; row in `chat_sessions` table
-- [x] `POST /join` with valid session PIN + username → student JWT returned
-- [x] `POST /join` with same username again → 409 conflict
-- [x] `POST /join` with wrong session PIN → 401
-- [x] Student JWT rejected on instructor route: `POST /session/start` with student JWT → 403
-- [x] Instructor JWT rejected on student route: `POST /message` with instructor JWT → 403 (verified in Phase 2)
-- [x] `POST /session/end` with instructor JWT → session row has `ended_at` set
-- [x] `POST /join` on ended session → 401
-
-### Phase 2 — Core chat
-- [x] `lib/sse.js` — maintain a `Map` of `session_id → Set<response>`, expose `broadcast(session_id, event)`
-- [x] `GET /stream` — register client in SSE map, send heartbeat every 30s, clean up on close
-- [x] `GET /messages` — return last 50 messages for session (with reply counts and reaction counts)
-- [x] `POST /message` — insert message, broadcast `message_new`
-- [x] Reply support — accept optional `parent_id`; validate it belongs to same session
-
-#### Verify Phase 2
-- [x] Open SSE stream in terminal: `curl -N localhost:3000/stream -H "Authorization: Bearer <student_jwt>"` — connection stays open
-- [x] Heartbeat comment (`: heartbeat`) appears in the SSE stream every 30s
-- [x] `POST /message` with student JWT → message appears in SSE stream immediately
-- [x] `GET /messages` returns the posted message with correct fields
-- [x] Post a reply with `parent_id` set → appears in `GET /messages` under parent
-- [x] Post a reply with a `parent_id` from a different session → 400/404
-- [x] Closing the curl stream (Ctrl-C) → server removes client cleanly (no crash; confirm via server logs)
-
-### Phase 3 — Reactions
-- [x] `POST /react` — upsert/delete reaction (toggle), broadcast `reaction_update` with new counts for that message
-- [x] Aggregate reaction counts in the `/messages` response
-
-#### Verify Phase 3
-- [x] `POST /react` with `{message_id, emoji: "👍"}` → `reaction_update` event appears in SSE stream with count 1
-- [x] Same request again (toggle off) → `reaction_update` event with count 0; row removed from `reactions` table
-- [x] `GET /messages` includes reaction counts for each message
-- [x] Two different users reacting with the same emoji → count 2; one toggles off → count 1
-- [x] Invalid emoji (not in fixed set) → 400
-
-### Phase 4 — Polls
-- [x] `POST /poll` — insert poll, broadcast `poll_new` (options only, no vote counts)
-- [x] `POST /vote` — insert vote (enforce UNIQUE constraint), return current vote count to instructor only
-- [x] `POST /poll/:id/close` — set `closed_at`, broadcast `poll_closed` with full results
-- [x] `/messages` and SSE events include active poll state for students joining mid-session
-
-#### Verify Phase 4
-- [x] `POST /poll` with instructor JWT → `poll_new` event appears in SSE stream; event contains options but no vote counts
-- [x] `POST /vote` with student JWT → vote recorded; second vote by same user → 409
-- [x] Vote counts visible via instructor query before poll closes; not exposed to student JWT
-- [x] `POST /poll/:id/close` → `poll_closed` event broadcast with full results including counts
-- [x] New student joins after poll created but before close → `GET /messages` (or SSE connect) includes active poll
-- [x] `POST /vote` on a closed poll → 400
-
-### Phase 5 — Frontend (student)
-- [ ] Join screen: PIN + username form → store JWT in `localStorage`
-- [ ] Chat feed: render messages, replies (collapsed), reactions
-- [ ] SSE listener: handle all event types, update UI reactively
-- [ ] Emoji reaction bar on each message (fixed set, toggle behavior)
-- [ ] Reply thread toggle — "N replies" expands inline
-- [ ] Poll card: show options, submit vote, show "waiting for results" state, then show results bar chart on `poll_closed`
-- [ ] Reconnect: on load, check `localStorage` for JWT; re-fetch last 50 messages; re-establish SSE
-- [ ] **A11y**: semantic HTML throughout — `<main>`, `<header>`, `<section>`, `<form>`, real `<button>` elements, `<label>` for every input
-- [ ] **A11y**: message feed has `aria-live="polite"` so new messages are announced to screen readers without stealing focus
-- [ ] **A11y**: `session_ended` and error alerts use `aria-live="assertive"` (urgent, interrupts)
-- [ ] **A11y**: emoji reaction buttons have descriptive `aria-label` (e.g., `"Thumbs up, 3 reactions"`) and `aria-pressed` for toggle state
-- [ ] **A11y**: poll rendered as `<fieldset>`/`<legend>`/`<input type="radio">` group; vote confirmation announced via live region
-- [ ] **A11y**: reply thread toggle button has `aria-expanded` and `aria-controls` pointing to the reply list
-- [ ] **A11y**: after join form submits, move focus to the message input
-- [ ] **A11y**: verify color contrast meets WCAG AA (timestamps and reaction counts are common failure points with Pico.css)
-
-#### Verify Phase 5
-- [ ] Join screen: wrong PIN shows error message; correct PIN + username advances to chat
-- [ ] JWT and username present in `localStorage` after join (check via browser DevTools → Application)
-- [ ] Post a message via curl → appears in browser without page reload
-- [ ] React to a message → count updates immediately; click again → toggles off
-- [ ] Expand reply thread → replies appear inline
-- [ ] Create a poll via curl → voting card appears; vote → card shows "waiting for results"
-- [ ] Close poll via curl → results bar chart appears
-- [ ] Hard-reload the page → chat feed restores last 50 messages; SSE reconnects (check Network tab)
-- [ ] End session via curl → student UI shows session-ended state
-- [ ] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
-- [ ] **A11y**: run with a screen reader (VoiceOver on macOS or NVDA on Windows) — new messages announced, reactions announced, poll announced, session-end announced
-- [ ] **A11y**: check all pages with browser accessibility inspector (Chrome DevTools → Lighthouse or axe extension) — zero critical violations
-
-### Phase 6 — Frontend (instructor dashboard)
-- [ ] Login screen → dashboard
-- [ ] Session PIN displayed prominently with copy button
-- [ ] Live message feed with timestamps (all messages, including replies)
-- [ ] Create poll form (prompt + up to 4 options)
-- [ ] Active poll panel: live vote counts (visible to instructor before close), close button
-- [ ] End session button (with confirmation)
-- [ ] Export log button — downloads JSON for current session
-- [ ] **A11y**: same semantic HTML and live region requirements as student frontend
-- [ ] **A11y**: live vote count updates announced via `aria-live="polite"` region (not the count inline, which would be too noisy — a summary region)
-- [ ] **A11y**: "End Session" confirmation dialog is a proper `<dialog>` element with focus trapped inside and returned to trigger button on dismiss
-- [ ] **A11y**: poll results bar chart has a text/table alternative (e.g., visually-hidden `<table>` or `aria-label` with percentages on each bar)
-
-#### Verify Phase 6
-- [ ] Wrong instructor PIN shows error; correct PIN advances to dashboard
-- [ ] "Start Session" displays a 4-digit PIN; copy button copies it to clipboard
-- [ ] Student posts a message via a second browser tab → appears in instructor feed with timestamp
-- [ ] Create poll → poll card appears in dashboard with live vote counts
-- [ ] Student votes → count increments in instructor view without reload
-- [ ] Close poll → student view shows results; instructor panel reflects closed state
-- [ ] "End Session" button requires confirmation before firing
-- [ ] Export log downloads valid JSON containing all messages, replies, reactions, and poll results for the session
-- [ ] **A11y**: navigate the full instructor flow using only a keyboard — no mouse required
-- [ ] **A11y**: "End Session" confirmation dialog traps focus; Escape dismisses and returns focus to the button
-- [ ] **A11y**: poll results bar chart is interpretable without sight (check via screen reader or axe)
-
-### Phase 7 — Hardening
-- [ ] Rate limiting via `@fastify/rate-limit` (per IP, per route)
-- [ ] Username conflict handling — reject duplicate usernames in same session with a clear error
-- [ ] SSE reconnect logic on client (retry with exponential backoff)
-- [ ] Validate all inputs (message length cap, poll option count, etc.)
-- [ ] Ensure `DB_PATH` directory exists on startup; log a clear error if volume isn't persistent
-
-#### Verify Phase 7
-- [ ] Rapid-fire 20 `POST /message` requests → rate limiter returns 429 after threshold
-- [ ] Message body exceeding length cap → 400 with descriptive error
-- [ ] Poll with 5 options → 400; poll with 1 option → 400
-- [ ] Kill the server mid-SSE-stream, restart it → client reconnects automatically (observe in browser Network tab)
-- [ ] Start server with `DB_PATH` pointing to a non-existent directory → clear error logged, process exits
-
-### Phase 8 — Deployment
-- [ ] Write `railway.toml` or `render.yaml` config
-- [ ] Document persistent disk volume setup (mount at `/data`, set `DB_PATH=/data/chat.db`)
-- [ ] Add a `/healthz` route for uptime monitoring
-
-#### Verify Phase 8
-- [ ] Push to Railway/Render → deploy succeeds with no build errors
-- [ ] `curl https://<deployed-url>/healthz` → 200
-- [ ] Full happy path on production URL: instructor login → start session → student join → message → react → poll → end session
-- [ ] Redeploy (push a trivial commit) → chat history still present after redeploy (confirms persistent volume is working)
-
-### Phase 9 — README (user guide)
-A `README.md` written for the instructor returning to this project months later with no memory of it.
-- [ ] **Setup**: prerequisites (Node 20+, clone, `npm install`, copy `.env.example` → `.env`, fill in `INSTRUCTOR_PIN` and `JWT_SECRET`)
-- [ ] **Running locally**: `npm start`, what URL to open
-- [ ] **Running a session**: step-by-step — log in, start session, share PIN with students, create polls, close polls, end session, export log
-- [ ] **Deployment**: how to push to Railway/Render, where to set env vars, persistent disk setup
-- [ ] **Env var reference**: what each variable does, safe defaults vs. must-change
-
-#### Verify Phase 9
-- [ ] Follow the README from scratch on a clean machine (or a fresh clone) — server starts and a session runs end-to-end without consulting any other docs
+| Phase | Description | Status |
+|---|---|---|
+| 0 | Project setup (deps, DB migration, server stub) | ✅ Done |
+| 1 | Auth & sessions (instructor login, student join, session lifecycle) | ✅ Done |
+| 2 | Core chat (SSE stream, messages, replies) | ✅ Done |
+| 3 | Reactions (toggle, broadcast, counts) | ✅ Done |
+| 4 | Polls (create, vote, close, results) | ✅ Done |
+| 5 | Student frontend (`public/index.html`, `public/app.js`) | 🔧 In progress |
+| 6 | Instructor dashboard (`public/instructor.html`, `public/instructor.js`) | ⬜ Pending |
+| 7 | Hardening (rate limiting, input validation, SSE reconnect) | ⬜ Pending |
+| 8 | Deployment (Railway/Render config, persistent volume) | ⬜ Pending |
+| 9 | README (user guide for the instructor) | ⬜ Pending |
 
 ---
 

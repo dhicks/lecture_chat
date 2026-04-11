@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lecture Chat</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f4f5f7;
+      --surface:   #ffffff;
+      --border:    #d1d5db;
+      --text:      #111827;
+      --muted:     #4b5563;   /* ≥4.5:1 contrast on white */
+      --accent:    #2563eb;
+      --accent-fg: #ffffff;
+      --danger:    #b91c1c;
+      --radius:    10px;
+      --font:      system-ui, -apple-system, sans-serif;
+      --max-w:     480px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    /* ── App shell: centered tall column ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      background: var(--surface);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+
+    /* ── Join screen ── */
+    .join-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 2rem 1.5rem;
+      gap: 1.5rem;
+    }
+
+    .join-screen h1 { font-size: 1.6rem; font-weight: 700; text-align: center; }
+
+    .join-form { width: 100%; display: flex; flex-direction: column; gap: 1rem; }
+
+    .field { display: flex; flex-direction: column; gap: 0.3rem; }
+
+    label { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
+
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      font-size: 1rem;
+      font-family: var(--font);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      font-family: var(--font);
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: var(--accent-fg); width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+
+    /* ── Alerts ── */
+    .alert { padding: 0.7rem 1rem; border-radius: var(--radius); font-size: 0.9rem; font-weight: 500; }
+    .alert-error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
+
+    /* ── Chat layout: flex column filling the shell ── */
+    .chat-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .chat-header h1 { font-size: 1.1rem; font-weight: 700; }
+    .chat-header .username-badge { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+
+    /* ── Message feed: grows, scrolls ── */
+    .message-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem 0.75rem 0.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* ── Message items ── */
+    .message-item {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.75rem;
+    }
+
+    .message-item.is-reply {
+      background: #f0f4ff;
+      font-size: 0.93rem;
+    }
+
+    .message-meta { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.15rem; }
+    .message-author { font-weight: 700; font-size: 0.9rem; }
+    .message-time { font-size: 0.78rem; color: var(--muted); }
+    .message-body { word-break: break-word; white-space: pre-wrap; }
+
+    /* ── Reaction bar ── */
+    .reaction-bar { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.35rem; }
+
+    .reaction-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.15rem 0.45rem;
+      min-height: 32px;
+      min-width: 44px;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      font-family: var(--font);
+      color: var(--text);
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .reaction-btn[aria-pressed="true"] {
+      background: #eff6ff;
+      border-color: var(--accent);
+    }
+    .reaction-btn:hover:not(:disabled) { background: #f0f4ff; }
+
+    .reaction-count { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+
+    /* ── Reply thread ── */
+    .reply-toggle-row { margin-top: 0.35rem; }
+
+    .reply-toggle-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.1rem 0;
+      min-height: 32px;
+      font-family: var(--font);
+    }
+    .reply-toggle-btn:hover { text-decoration: underline; }
+
+    .reply-list { margin-top: 0.4rem; display: flex; flex-direction: column; gap: 0.35rem; margin-left: 0.75rem; }
+
+    .reply-form { display: flex; gap: 0.4rem; margin-top: 0.4rem; margin-left: 0.75rem; }
+    .reply-form input {
+      flex: 1;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.9rem;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-family: var(--font);
+    }
+    .reply-form input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+    }
+    .reply-form .btn-reply-send {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: none;
+      border-radius: var(--radius);
+      padding: 0.4rem 0.75rem;
+      min-height: 44px;
+      min-width: 44px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font);
+    }
+
+    /* ── Poll card ── */
+    .poll-card {
+      margin: 0 0.75rem 0.5rem;
+      padding: 0.8rem 1rem;
+      border: 1.5px solid #c7d2fe;
+      border-radius: var(--radius);
+      background: #eef2ff;
+      flex-shrink: 0;
+    }
+
+    .poll-card fieldset { border: none; padding: 0; }
+    .poll-card legend { font-weight: 700; font-size: 1rem; margin-bottom: 0.5rem; }
+
+    .poll-options { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.65rem; }
+
+    .poll-option-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      min-height: 44px;
+      padding: 0.2rem 0;
+    }
+    .poll-option-label input[type="radio"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .poll-waiting { font-size: 0.9rem; color: var(--muted); font-style: italic; }
+
+    /* ── Poll results ── */
+    .poll-results-label { font-size: 0.88rem; color: var(--muted); margin-bottom: 0.15rem; display: flex; justify-content: space-between; }
+    .poll-result-row { margin-bottom: 0.5rem; }
+    .poll-result-bar-track { height: 18px; background: #e0e7ff; border-radius: 4px; overflow: hidden; }
+    .poll-result-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.4s ease; min-width: 4px; }
+
+    /* ── Visually hidden (a11y) ── */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    /* ── Message input bar ── */
+    .input-bar {
+      border-top: 1px solid var(--border);
+      padding: 0.6rem 0.75rem;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .input-bar-form { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .input-bar textarea {
+      flex: 1;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.95rem;
+      border-radius: var(--radius);
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+    .btn-send-main {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: none;
+      border-radius: var(--radius);
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0.55rem 0.8rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      align-self: flex-end;
+      font-family: var(--font);
+    }
+    .btn-send-main:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-send-main:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Session ended banner ── */
+    .session-ended-banner {
+      padding: 0.7rem 1rem;
+      background: #fef2f2;
+      color: var(--danger);
+      border-top: 1px solid #fecaca;
+      font-weight: 600;
+      text-align: center;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    /* ── Loading state ── */
+    .loading-msg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
