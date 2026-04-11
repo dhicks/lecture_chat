@@ -20,7 +20,7 @@ Largely complete. Outstanding polish items:
 - [x] Close poll via curl → results bar chart appears
 - [x] Hard-reload the page → chat feed restores last 50 messages; SSE reconnects
 - [x] End session via curl → student UI shows session-ended state
-- [ ] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
+- [X] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
 - [ ] **A11y**: run with a screen reader (VoiceOver on macOS) — new messages announced, reactions announced, poll announced, session-end announced
 
 ---
