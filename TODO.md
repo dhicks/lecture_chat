@@ -7,36 +7,11 @@ Complete. Outstanding polish item for a future pass:
 - **Poll card compaction after voting** (`public/app.js` PollCard): After voting, collapse the poll card to a compact "Change your response" button rather than showing the full form with a note. Clicking the button re-expands the form.
 
 ### Verify Phase 5
-- [x] Join screen: wrong PIN shows error message; correct PIN + username advances to chat
-- [x] JWT and username present in `localStorage` after join
-- [x] Post a message via curl → appears in browser without page reload
-- [x] React to a message → count updates immediately; click again → toggles off
-- [x] Expand reply thread → replies appear inline
-- [x] Create a poll via curl → voting card appears; vote → card shows "waiting for results"
-- [x] Close poll via curl → results bar chart appears
-- [x] Hard-reload the page → chat feed restores last 50 messages; SSE reconnects
-- [x] End session via curl → student UI shows session-ended state
-- [x] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
-- [x] Poll re-voting: vote → change answer → close poll → results reflect last vote
-- [x] Dismiss poll results: close poll → "Dismiss" button hides results card
-- [x] Logout: click username badge → dialog → "Log out" → localStorage cleared → join screen → rejoin with same username succeeds
 - [ ] **A11y**: run with a screen reader (VoiceOver on macOS) — new messages announced, reactions announced, poll announced, session-end announced
 
 ---
 
 ## Phase 6 — Frontend (instructor dashboard)
-
-- [x] Login screen → dashboard
-- [x] Session PIN displayed prominently with copy button
-- [x] Live message feed with timestamps (all messages, including replies)
-- [x] Create poll form (prompt + up to 4 options)
-- [x] Active poll panel: live vote counts (visible to instructor before close), close button
-- [x] End session button (with confirmation)
-- [x] Export log button — downloads JSON for current session
-- [x] **A11y**: same semantic HTML and live region requirements as student frontend
-- [x] **A11y**: live vote count updates announced via `aria-live="polite"` region (not the count inline, which would be too noisy — a summary region)
-- [x] **A11y**: "End Session" confirmation dialog is a proper `<dialog>` element with focus trapped inside and returned to trigger button on dismiss
-- [x] **A11y**: poll results bar chart has a text/table alternative (e.g., visually-hidden `<table>` or `aria-label` with percentages on each bar)
 
 - [ ] **Two-column layout** (`public/instructor.html`, `public/instructor.js`): Move the message feed to the right column alongside the session/poll controls, rather than below them.
 - [ ] **Previous poll results visible** (`public/instructor.js`): After a poll is closed, its results should remain visible in the instructor dashboard (not disappear). Keep a `closedPolls` list and render it below the active poll card.
@@ -46,14 +21,14 @@ Complete. Outstanding polish item for a future pass:
 
 
 ### Verify Phase 6
-- [ ] Wrong instructor PIN shows error; correct PIN advances to dashboard
-- [ ] "Start Session" displays a 4-digit PIN; copy button copies it to clipboard
-- [ ] Student posts a message via a second browser tab → appears in instructor feed with timestamp
-- [ ] Create poll → poll card appears in dashboard with live vote counts
-- [ ] Student votes → count increments in instructor view without reload
-- [ ] Close poll → student view shows results; instructor panel reflects closed state
-- [ ] "End Session" button requires confirmation before firing
-- [ ] Export log downloads valid JSON containing all messages, replies, reactions, and poll results for the session
+- [x] Wrong instructor PIN shows error; correct PIN advances to dashboard
+- [x] "Start Session" displays a 4-digit PIN; copy button copies it to clipboard
+- [x] Student posts a message via a second browser tab → appears in instructor feed with timestamp
+- [x] Create poll → poll card appears in dashboard with live vote counts
+- [x] Student votes → count increments in instructor view without reload
+- [x] Close poll → student view shows results; instructor panel reflects closed state
+- [x] "End Session" button requires confirmation before firing
+- [x] Export log downloads valid JSON containing all messages, replies, reactions, and poll results for the session
 - [ ] **A11y**: navigate the full instructor flow using only a keyboard — no mouse required
 - [ ] **A11y**: "End Session" confirmation dialog traps focus; Escape dismisses and returns focus to the button
 - [ ] **A11y**: poll results bar chart is interpretable without sight (check via screen reader or axe)
