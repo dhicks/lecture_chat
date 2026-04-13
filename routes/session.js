@@ -93,6 +93,36 @@ async function sessionRoutes(app) {
     return { ok: true };
   });
 
+  // GET /session/ — paginated list of ended sessions with stats
+  app.get('/', { preHandler: requireInstructor }, async (req, reply) => {
+    const limit  = Math.min(parseInt(req.query.limit  ?? 20, 10), 100);
+    const offset = parseInt(req.query.offset ?? 0, 10);
+    const db = app.db;
+
+    const { total } = db.prepare(
+      `SELECT COUNT(*) AS total FROM chat_sessions WHERE ended_at IS NOT NULL`
+    ).get();
+
+    const sessions = db.prepare(`
+      SELECT
+        cs.id,
+        cs.session_pin,
+        cs.started_at,
+        cs.ended_at,
+        COUNT(DISTINCT m.id) AS message_count,
+        COUNT(DISTINCT p.id) AS poll_count
+      FROM chat_sessions cs
+      LEFT JOIN messages m ON m.session_id = cs.id
+      LEFT JOIN polls    p ON p.session_id = cs.id
+      WHERE cs.ended_at IS NOT NULL
+      GROUP BY cs.id
+      ORDER BY cs.started_at DESC
+      LIMIT ? OFFSET ?
+    `).all(limit, offset);
+
+    reply.send({ sessions, total });
+  });
+
   // GET /session/:id/export — full session log as JSON
   app.get('/:id/export', { preHandler: requireInstructor }, async (req, reply) => {
     const sessionId = Number(req.params.id);

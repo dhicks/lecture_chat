@@ -8,6 +8,7 @@ set -euo pipefail
 BASE="http://localhost:3000"
 SSE_LOG="/tmp/lecture_chat_sse.log"
 BODY="/tmp/lecture_chat_body.json"
+TEST_DB="/tmp/lecture_chat_test.db"
 FAILURES=0
 SERVER_PID=""
 
@@ -41,6 +42,7 @@ cleanup() {
   [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null || true
   # kill any leftover SSE curl
   pkill -f "curl.*stream" 2>/dev/null || true
+  rm -f "$TEST_DB"
 }
 trap cleanup EXIT
 
@@ -49,9 +51,9 @@ trap cleanup EXIT
 echo "── Setup ──────────────────────────────────────────────────────────────────"
 pkill -f "node server.js" 2>/dev/null || true
 sleep 0.5
-rm -f data/chat.db
+rm -f "$TEST_DB"
 
-node server.js >/tmp/lecture_chat_server.log 2>&1 &
+DB_PATH="$TEST_DB" node server.js >/tmp/lecture_chat_server.log 2>&1 &
 SERVER_PID=$!
 
 # wait for server to be ready
@@ -69,7 +71,7 @@ echo "── Phase 0: project setup ──────────────�
 STATUS=$(http GET "$BASE/healthz")
 check "healthz → 200" "200" "$STATUS"
 
-TABLES=$(sqlite3 data/chat.db ".tables" 2>/dev/null | tr ' ' '\n' | sort | tr '\n' ' ' | xargs)
+TABLES=$(sqlite3 "$TEST_DB" ".tables" 2>/dev/null | tr ' ' '\n' | sort | tr '\n' ' ' | xargs)
 for tbl in chat_sessions instructor messages poll_votes polls reactions session_users; do
   [[ "$TABLES" == *"$tbl"* ]] \
     && echo "PASS: table $tbl exists" \
@@ -176,7 +178,7 @@ REPLY_FOUND=$(jq -r ".messages[] | select(.id == $MSG_ID) | .replies[] | select(
 check "reply grouped under parent in GET /messages" "$REPLY_ID" "$REPLY_FOUND"
 
 # cross-session: insert a message directly in a fake session
-OTHER_MSG_ID=$(sqlite3 data/chat.db \
+OTHER_MSG_ID=$(sqlite3 "$TEST_DB" \
   "INSERT INTO messages (session_id, username, body) VALUES (9999, 'ghost', 'other session'); SELECT last_insert_rowid();")
 
 STATUS=$(http POST "$BASE/message" -H "Authorization: Bearer $STU_ALICE" \
@@ -207,7 +209,7 @@ sleep 0.3
 sse_has ".type == \"reaction_update\" and .message_id == $MSG_ID and (.reactions[\"👍\"] == 0 or .reactions[\"👍\"] == null)" \
   && echo "PASS: reaction_update count=0 in SSE log" \
   || { echo "FAIL: reaction_update count=0 not in SSE log"; FAILURES=$((FAILURES + 1)); }
-ROW_COUNT=$(sqlite3 data/chat.db \
+ROW_COUNT=$(sqlite3 "$TEST_DB" \
   "SELECT COUNT(*) FROM reactions WHERE message_id=$MSG_ID AND username='alice' AND emoji='👍';")
 check "reaction row removed from DB" "0" "$ROW_COUNT"
 
@@ -284,7 +286,7 @@ check "POST /vote duplicate → 409" "409" "$STATUS"
 
 # vote with poll from different session
 # insert a poll directly into a fake session to avoid multi-session ambiguity in the API
-OTHER_POLL_ID=$(sqlite3 data/chat.db \
+OTHER_POLL_ID=$(sqlite3 "$TEST_DB" \
   "INSERT INTO polls (session_id, prompt, options) VALUES (9999, 'Phantom', '[\"X\",\"Y\"]'); SELECT last_insert_rowid();")
 STATUS=$(http POST "$BASE/vote" -H "Authorization: Bearer $STU_ALICE" \
   -H "Content-Type: application/json" -d "{\"poll_id\":$OTHER_POLL_ID,\"choice\":0}")
@@ -339,7 +341,7 @@ sse_has ".type == \"session_ended\"" \
   && echo "PASS: session_ended in SSE log" \
   || { echo "FAIL: session_ended not in SSE log"; FAILURES=$((FAILURES + 1)); }
 
-ENDED=$(sqlite3 data/chat.db \
+ENDED=$(sqlite3 "$TEST_DB" \
   "SELECT ended_at IS NOT NULL FROM chat_sessions WHERE id=$SESSION_ID;")
 check "session row has ended_at set" "1" "$ENDED"
 
@@ -360,6 +362,70 @@ STATUS=$(http POST "$BASE/vote" -H "Authorization: Bearer $STU_ALICE" \
 check "POST /vote after session ends → 403" "403" "$STATUS"
 
 echo "(skipping: SSE cleanup on disconnect — manual verification required)"
+
+# ── Phase 6: session list & export ────────────────────────────────────────────
+
+echo ""
+echo "── Phase 6: session list & export ─────────────────────────────────────────"
+
+# GET /session without auth → 401
+STATUS=$(http GET "$BASE/session")
+check "GET /session no auth → 401" "401" "$STATUS"
+
+# Student token on instructor-only route → 403
+STATUS=$(http GET "$BASE/session" -H "Authorization: Bearer $STU_ALICE")
+check "GET /session with student JWT → 403" "403" "$STATUS"
+
+# Instructor can list ended sessions
+STATUS=$(http GET "$BASE/session" -H "Authorization: Bearer $INST")
+check "GET /session → 200" "200" "$STATUS"
+LIST_TOTAL=$(jq -r '.total' "$BODY")
+check "GET /session total = 1" "1" "$LIST_TOTAL"
+LIST_LEN=$(jq -r '.sessions | length' "$BODY")
+check "GET /session returns 1 session" "1" "$LIST_LEN"
+LISTED_ID=$(jq -r '.sessions[0].id' "$BODY")
+check "GET /session lists the ended session" "$SESSION_ID" "$LISTED_ID"
+
+# Stats: 2 messages (alice top-level + bob reply), 2 polls (POLL_ID + POLL2_ID)
+MSG_COUNT=$(jq -r '.sessions[0].message_count' "$BODY")
+check "GET /session message_count = 2" "2" "$MSG_COUNT"
+POLL_COUNT=$(jq -r '.sessions[0].poll_count' "$BODY")
+check "GET /session poll_count = 2" "2" "$POLL_COUNT"
+
+# Pagination: limit=1 returns 1 row but total still 1
+STATUS=$(http GET "$BASE/session?limit=1&offset=0" -H "Authorization: Bearer $INST")
+check "GET /session?limit=1 → 200" "200" "$STATUS"
+check "GET /session?limit=1 returns 1 row" "1" "$(jq -r '.sessions | length' "$BODY")"
+check "GET /session?limit=1 total unchanged" "1" "$(jq -r '.total' "$BODY")"
+
+# Offset past end returns empty sessions array
+STATUS=$(http GET "$BASE/session?limit=10&offset=99" -H "Authorization: Bearer $INST")
+check "GET /session?offset=99 → 200" "200" "$STATUS"
+check "GET /session?offset=99 returns 0 rows" "0" "$(jq -r '.sessions | length' "$BODY")"
+
+# Export: no auth → 401
+STATUS=$(http GET "$BASE/session/$SESSION_ID/export")
+check "GET /session/:id/export no auth → 401" "401" "$STATUS"
+
+# Export: student JWT → 403
+STATUS=$(http GET "$BASE/session/$SESSION_ID/export" -H "Authorization: Bearer $STU_ALICE")
+check "GET /session/:id/export with student JWT → 403" "403" "$STATUS"
+
+# Export: valid
+STATUS=$(http GET "$BASE/session/$SESSION_ID/export" -H "Authorization: Bearer $INST")
+check "GET /session/:id/export → 200" "200" "$STATUS"
+EXPORT_SESSION_ID=$(jq -r '.session.id' "$BODY")
+check "export contains correct session id" "$SESSION_ID" "$EXPORT_SESSION_ID"
+MSG_IN_EXPORT=$(jq "[.messages[] | select(.id == $MSG_ID)] | length" "$BODY")
+check "export contains original message" "1" "$MSG_IN_EXPORT"
+REPLY_IN_EXPORT=$(jq "[.messages[] | .replies[] | select(.id == $REPLY_ID)] | length" "$BODY")
+check "export contains reply nested under parent" "1" "$REPLY_IN_EXPORT"
+POLL_RESULTS_LEN=$(jq "[.polls[] | select(.id == $POLL_ID)] | .[0].results | length" "$BODY")
+check "export contains poll results" "3" "$POLL_RESULTS_LEN"
+
+# Export: nonexistent session → 404
+STATUS=$(http GET "$BASE/session/99999/export" -H "Authorization: Bearer $INST")
+check "GET /session/99999/export → 404" "404" "$STATUS"
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 

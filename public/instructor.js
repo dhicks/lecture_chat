@@ -106,6 +106,13 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // ── Components ────────────────────────────────────────────────────────────────
 
 // LoginScreen ─────────────────────────────────────────────────────────────────
@@ -747,6 +754,99 @@ function ExportButton({ token, sessionId }) {
   `;
 }
 
+// SessionHistory ──────────────────────────────────────────────────────────────
+
+function SessionHistory({ token, sessions, total, currentPage, pageSize, onPrev, onNext }) {
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError]   = useState('');
+
+  const totalPages = Math.ceil(total / pageSize) || 1;
+
+  async function downloadSession(id, label) {
+    setBusyId(id);
+    setError('');
+    try {
+      const res = await fetch(`/session/${id}/export`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `session-${id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (_) {
+      setError('Export failed. Please try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return html`
+    <section class="card" aria-labelledby="session-history-title">
+      <h2 class="card-title" id="session-history-title">Past sessions</h2>
+      ${error && html`
+        <div class="alert alert-error" role="alert" aria-live="assertive">${error}</div>
+      `}
+      ${sessions.length === 0
+        ? html`<p style="font-size:0.9rem; color:var(--muted);">No past sessions yet.</p>`
+        : html`
+          <ul class="session-history-list">
+            ${sessions.map(s => {
+              const label = formatDateTime(s.started_at);
+              const isBusy = busyId === s.id;
+              return html`
+                <li key=${s.id} class="session-history-item">
+                  <div class="session-history-info">
+                    <strong>${label}</strong>
+                    <span class="session-history-stats">
+                      ${s.message_count} message${s.message_count !== 1 ? 's' : ''} · ${s.poll_count} poll${s.poll_count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <button
+                    class="btn btn-secondary btn-sm"
+                    type="button"
+                    aria-label=${`Export session from ${label}`}
+                    onClick=${() => downloadSession(s.id, label)}
+                    disabled=${isBusy}
+                  >
+                    ${isBusy ? 'Exporting…' : 'Export'}
+                  </button>
+                </li>
+              `;
+            })}
+          </ul>
+          ${totalPages > 1 && html`
+            <div class="session-history-pagination" role="navigation" aria-label="Session history pages">
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                aria-label="Previous page"
+                onClick=${onPrev}
+                disabled=${currentPage === 0}
+              >◀</button>
+              <span class="session-history-page-info" aria-live="polite">
+                Page ${currentPage + 1} of ${totalPages}
+              </span>
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                aria-label="Next page"
+                onClick=${onNext}
+                disabled=${currentPage + 1 >= totalPages}
+              >▶</button>
+            </div>
+          `}
+        `
+      }
+    </section>
+  `;
+}
+
 // DashboardScreen ─────────────────────────────────────────────────────────────
 
 function DashboardScreen({ token, initialSession, onLogout }) {
@@ -754,8 +854,22 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   const [messages, setMessages]     = useState([]);
   const [activePoll, setActivePoll] = useState(null);
   const [closedPolls, setClosedPolls] = useState([]);
+  const [pastSessions, setPastSessions] = useState([]);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [currentPage, setCurrentPage]   = useState(0);
+  const PAGE_SIZE = 10;
 
   const sseRef = useRef(null);
+
+  function loadSessions(page) {
+    apiFetch(`/session?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`, { token })
+      .then(({ sessions, total }) => {
+        setPastSessions(sessions);
+        setSessionTotal(total);
+        setCurrentPage(page);
+      })
+      .catch(() => {});
+  }
 
   // ── Reconcile session state with server on mount ────────────────────────────
   // localStorage may be stale (session started in another tab/via curl, or server restarted).
@@ -783,6 +897,14 @@ function DashboardScreen({ token, initialSession, onLogout }) {
         if (err.status === 401) onLogout();
       });
   }, []);
+
+  // ── Load past sessions when no active session ──────────────────────────────
+
+  useEffect(() => {
+    if (session) return;
+    setCurrentPage(0);
+    loadSessions(0);
+  }, [session?.id ?? null]);
 
   // ── SSE event handler ───────────────────────────────────────────────────────
 
@@ -898,20 +1020,33 @@ function DashboardScreen({ token, initialSession, onLogout }) {
             onSessionEnded=${handleSessionEnded}
           />
 
-          <${PollPanel}
-            token=${token}
-            sessionId=${session?.id}
-            activePoll=${activePoll}
-            closedPolls=${closedPolls}
-            onPollCreated=${handlePollCreated}
-            onPollClosed=${handlePollClosed}
-          />
+          ${session && html`
+            <${PollPanel}
+              token=${token}
+              sessionId=${session.id}
+              activePoll=${activePoll}
+              closedPolls=${closedPolls}
+              onPollCreated=${handlePollCreated}
+              onPollClosed=${handlePollClosed}
+            />
 
-          <${ExportButton} token=${token} sessionId=${session?.id} />
+            <${ExportButton} token=${token} sessionId=${session.id} />
+          `}
         </div>
 
         <div class="dash-right">
-          <${MessageFeed} messages=${messages} />
+          ${session
+            ? html`<${MessageFeed} messages=${messages} />`
+            : html`<${SessionHistory}
+                token=${token}
+                sessions=${pastSessions}
+                total=${sessionTotal}
+                currentPage=${currentPage}
+                pageSize=${PAGE_SIZE}
+                onPrev=${() => loadSessions(currentPage - 1)}
+                onNext=${() => loadSessions(currentPage + 1)}
+              />`
+          }
         </div>
       </main>
     </div>
