@@ -363,11 +363,10 @@ function ActivePollCard({ token, poll, onPollClosed }) {
       `}
 
       ${poll.tally && html`
-        <div
-          aria-live="polite"
-          aria-label=${`Live vote totals: ${totalVotes} vote${totalVotes !== 1 ? 's' : ''} so far`}
-          aria-atomic="false"
-        >
+        <p class="sr-only" aria-live="polite" aria-atomic="true">
+          ${totalVotes} vote${totalVotes !== 1 ? 's' : ''} so far.
+        </p>
+        <div>
           ${poll.tally.map((row, i) => {
             const pct = totalVotes > 0 ? Math.round((row.votes / totalVotes) * 100) : 0;
             return html`

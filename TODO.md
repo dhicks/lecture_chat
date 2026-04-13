@@ -26,31 +26,24 @@ Complete. Outstanding polish item for a future pass:
 
 ## Phase 6 — Frontend (instructor dashboard)
 
-### Bugs
-
-- [x] **Session state on login**: Logging into the instructor UI while a session is already active (e.g. started via curl or another browser) shows "No active session." Clicking "Start session" returns a 409 with no way to end it. Fix: fetch `GET /session/active` on dashboard mount and populate state from server. Requires a new `GET /session/active` backend endpoint.
-- [ ] **Polls not pushed to students**: When the instructor creates a poll from the UI, students must manually refresh to see it. Results are also not pushed on close. Root cause unknown — SSE delivers events correctly via curl; likely a stale-JWT / session-mismatch issue from repeated server restarts during testing. Needs a clean retest, and possibly a 401 handler in `ChatScreen` that clears state and redirects to the join screen.
-- [ ] **Session-end not pushed to students**: When the instructor ends the session, students are not notified and attempts to post messages silently fail. Same suspected root cause as poll-push bug above.
-
-### Todos
+- [x] Login screen → dashboard
+- [x] Session PIN displayed prominently with copy button
+- [x] Live message feed with timestamps (all messages, including replies)
+- [x] Create poll form (prompt + up to 4 options)
+- [x] Active poll panel: live vote counts (visible to instructor before close), close button
+- [x] End session button (with confirmation)
+- [x] Export log button — downloads JSON for current session
+- [x] **A11y**: same semantic HTML and live region requirements as student frontend
+- [x] **A11y**: live vote count updates announced via `aria-live="polite"` region (not the count inline, which would be too noisy — a summary region)
+- [x] **A11y**: "End Session" confirmation dialog is a proper `<dialog>` element with focus trapped inside and returned to trigger button on dismiss
+- [x] **A11y**: poll results bar chart has a text/table alternative (e.g., visually-hidden `<table>` or `aria-label` with percentages on each bar)
 
 - [ ] **Two-column layout** (`public/instructor.html`, `public/instructor.js`): Move the message feed to the right column alongside the session/poll controls, rather than below them.
 - [ ] **Previous poll results visible** (`public/instructor.js`): After a poll is closed, its results should remain visible in the instructor dashboard (not disappear). Keep a `closedPolls` list and render it below the active poll card.
 - [ ] **Export old sessions** (`routes/session.js`, `public/instructor.js`): Add a `GET /sessions` endpoint listing recent sessions. In the dashboard, show a list of past sessions each with a download button that triggers the existing export endpoint.
+- [ ] Ability to collapse replies in instructor UI
 
-### Phase 6 feature checklist (original)
 
-- [ ] Login screen → dashboard
-- [ ] Session PIN displayed prominently with copy button
-- [ ] Live message feed with timestamps (all messages, including replies)
-- [ ] Create poll form (prompt + up to 4 options)
-- [ ] Active poll panel: live vote counts (visible to instructor before close), close button
-- [ ] End session button (with confirmation)
-- [ ] Export log button — downloads JSON for current session
-- [ ] **A11y**: same semantic HTML and live region requirements as student frontend
-- [ ] **A11y**: live vote count updates announced via `aria-live="polite"` region (not the count inline, which would be too noisy — a summary region)
-- [ ] **A11y**: "End Session" confirmation dialog is a proper `<dialog>` element with focus trapped inside and returned to trigger button on dismiss
-- [ ] **A11y**: poll results bar chart has a text/table alternative (e.g., visually-hidden `<table>` or `aria-label` with percentages on each bar)
 
 ### Verify Phase 6
 - [ ] Wrong instructor PIN shows error; correct PIN advances to dashboard
