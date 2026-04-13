@@ -26,6 +26,20 @@ Complete. Outstanding polish item for a future pass:
 
 ## Phase 6 — Frontend (instructor dashboard)
 
+### Bugs
+
+- [ ] **Session state on login**: Logging into the instructor UI while a session is already active (e.g. started via curl or another browser) shows "No active session." Clicking "Start session" returns a 409 with no way to end it. Fix: fetch `GET /session/active` on dashboard mount and populate state from server. Requires a new `GET /session/active` backend endpoint.
+- [ ] **Polls not pushed to students**: When the instructor creates a poll from the UI, students must manually refresh to see it. Results are also not pushed on close. Root cause unknown — SSE delivers events correctly via curl; likely a stale-JWT / session-mismatch issue from repeated server restarts during testing. Needs a clean retest, and possibly a 401 handler in `ChatScreen` that clears state and redirects to the join screen.
+- [ ] **Session-end not pushed to students**: When the instructor ends the session, students are not notified and attempts to post messages silently fail. Same suspected root cause as poll-push bug above.
+
+### Todos
+
+- [ ] **Two-column layout** (`public/instructor.html`, `public/instructor.js`): Move the message feed to the right column alongside the session/poll controls, rather than below them.
+- [ ] **Previous poll results visible** (`public/instructor.js`): After a poll is closed, its results should remain visible in the instructor dashboard (not disappear). Keep a `closedPolls` list and render it below the active poll card.
+- [ ] **Export old sessions** (`routes/session.js`, `public/instructor.js`): Add a `GET /sessions` endpoint listing recent sessions. In the dashboard, show a list of past sessions each with a download button that triggers the existing export endpoint.
+
+### Phase 6 feature checklist (original)
+
 - [ ] Login screen → dashboard
 - [ ] Session PIN displayed prominently with copy button
 - [ ] Live message feed with timestamps (all messages, including replies)

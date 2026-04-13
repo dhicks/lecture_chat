@@ -46,9 +46,70 @@ async function sessionRoutes(app) {
     return { ok: true };
   });
 
-  // GET /session/:id/export — Phase 6
+  // GET /session/:id/export — full session log as JSON
   app.get('/:id/export', { preHandler: requireInstructor }, async (req, reply) => {
-    return reply.code(501).send({ error: 'Not implemented yet' });
+    const sessionId = Number(req.params.id);
+    const db = app.db;
+
+    const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+    if (!session) return reply.code(404).send({ error: 'Session not found' });
+
+    const topMessages = db.prepare(
+      'SELECT id, username, body, created_at FROM messages WHERE session_id = ? AND parent_id IS NULL ORDER BY created_at ASC'
+    ).all(sessionId);
+
+    const replies = db.prepare(
+      'SELECT id, parent_id, username, body, created_at FROM messages WHERE session_id = ? AND parent_id IS NOT NULL ORDER BY created_at ASC'
+    ).all(sessionId);
+
+    const reactionRows = db.prepare(
+      'SELECT r.message_id, r.emoji, COUNT(*) as count FROM reactions r JOIN messages m ON r.message_id = m.id WHERE m.session_id = ? GROUP BY r.message_id, r.emoji'
+    ).all(sessionId);
+
+    const reactionsMap = {};
+    for (const row of reactionRows) {
+      if (!reactionsMap[row.message_id]) reactionsMap[row.message_id] = {};
+      reactionsMap[row.message_id][row.emoji] = row.count;
+    }
+
+    const replyMap = {};
+    for (const r of replies) {
+      if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+      replyMap[r.parent_id].push({ ...r, reactions: reactionsMap[r.id] || {} });
+    }
+
+    const messages = topMessages.map(m => ({
+      ...m,
+      reactions: reactionsMap[m.id] || {},
+      replies: replyMap[m.id] || [],
+    }));
+
+    const polls = db.prepare(
+      'SELECT * FROM polls WHERE session_id = ? ORDER BY created_at ASC'
+    ).all(sessionId);
+
+    const pollsWithResults = polls.map(p => {
+      const opts = JSON.parse(p.options);
+      const voteCounts = db.prepare(
+        'SELECT choice, COUNT(*) as votes FROM poll_votes WHERE poll_id = ? GROUP BY choice'
+      ).all(p.id);
+      const countMap = {};
+      for (const row of voteCounts) countMap[row.choice] = row.votes;
+      const results = opts.map((option, i) => ({ option, votes: countMap[i] || 0 }));
+      return { id: p.id, prompt: p.prompt, created_at: p.created_at, closed_at: p.closed_at, results };
+    });
+
+    reply.header('Content-Disposition', `attachment; filename="session-${sessionId}.json"`);
+    return {
+      session: {
+        id: session.id,
+        session_pin: session.session_pin,
+        started_at: session.started_at,
+        ended_at: session.ended_at,
+      },
+      messages,
+      polls: pollsWithResults,
+    };
   });
 }
 

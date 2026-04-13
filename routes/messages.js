@@ -4,10 +4,31 @@ const { requireStudent } = require('../lib/auth');
 const { broadcast } = require('../lib/sse');
 
 async function messageRoutes(app) {
+  // Inline preHandler: accept student or instructor JWT
+  async function requireStudentOrInstructor(req, reply) {
+    try {
+      await req.jwtVerify();
+    } catch {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    if (req.user.role !== 'student' && req.user.role !== 'instructor') {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+  }
+
   // GET /messages — last 50 top-level messages with replies and reaction counts
-  app.get('/messages', { preHandler: requireStudent }, (req, reply) => {
-    const { session_id } = req.user;
+  app.get('/messages', { preHandler: requireStudentOrInstructor }, (req, reply) => {
     const db = app.db;
+
+    // Instructors have no session_id in their JWT; resolve from active session
+    let session_id;
+    if (req.user.role === 'instructor') {
+      const session = db.prepare('SELECT id FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
+      if (!session) return reply.send({ messages: [], active_poll: null });
+      session_id = session.id;
+    } else {
+      session_id = req.user.session_id;
+    }
 
     const topLevel = db.prepare(`
       SELECT id, username, body, parent_id, created_at
@@ -74,9 +95,20 @@ async function messageRoutes(app) {
       ORDER BY created_at DESC LIMIT 1
     `).get(session_id);
 
-    const active_poll = activePollRow
-      ? { id: activePollRow.id, prompt: activePollRow.prompt, options: JSON.parse(activePollRow.options) }
-      : null;
+    let active_poll = null;
+    if (activePollRow) {
+      const opts = JSON.parse(activePollRow.options);
+      active_poll = { id: activePollRow.id, prompt: activePollRow.prompt, options: opts };
+      // Instructors see current vote tally immediately; students never see counts until poll closes
+      if (req.user.role === 'instructor') {
+        const tallyRows = db.prepare(
+          'SELECT choice, COUNT(*) as votes FROM poll_votes WHERE poll_id = ? GROUP BY choice'
+        ).all(activePollRow.id);
+        const tallyMap = {};
+        for (const row of tallyRows) tallyMap[row.choice] = row.votes;
+        active_poll.tally = opts.map((option, i) => ({ option, votes: tallyMap[i] || 0 }));
+      }
+    }
 
     return reply.send({ messages, active_poll });
   });

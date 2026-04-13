@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lecture Chat — Instructor</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f4f5f7;
+      --surface:   #ffffff;
+      --border:    #d1d5db;
+      --text:      #111827;
+      --muted:     #4b5563;
+      --accent:    #2563eb;
+      --accent-fg: #ffffff;
+      --danger:    #b91c1c;
+      --success:   #15803d;
+      --radius:    10px;
+      --font:      system-ui, -apple-system, sans-serif;
+      --max-w:     860px;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    /* ── App shell ── */
+    #app {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      background: var(--surface);
+      min-height: 100dvh;
+      box-shadow: 0 0 0 1px var(--border);
+    }
+
+    /* ── Login screen (centered, same as student join) ── */
+    .login-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: 2rem 1.5rem;
+      gap: 1.5rem;
+    }
+    .login-screen h1 { font-size: 1.6rem; font-weight: 700; text-align: center; }
+    .login-form { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 1rem; }
+
+    /* ── Dashboard layout ── */
+    .dashboard { display: flex; flex-direction: column; min-height: 100dvh; }
+
+    .dash-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .dash-header h1 { font-size: 1.1rem; font-weight: 700; }
+
+    .dash-main { flex: 1; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* ── Card containers ── */
+    .card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      background: var(--surface);
+    }
+    .card-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; }
+
+    /* ── Session panel ── */
+    .session-pin-display {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .session-pin {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    .session-meta { font-size: 0.85rem; color: var(--muted); }
+
+    .session-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+    /* ── Poll panel ── */
+    .poll-builder-form { display: flex; flex-direction: column; gap: 0.7rem; }
+    .option-row { display: flex; gap: 0.5rem; align-items: center; }
+    .option-row input { flex: 1; }
+    .option-row .btn-icon {
+      min-width: 36px;
+      min-height: 36px;
+      padding: 0;
+      font-size: 1.1rem;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font);
+    }
+    .option-row .btn-icon:hover { background: var(--bg); }
+
+    /* Active poll card */
+    .active-poll-card {
+      border: 1.5px solid #c7d2fe;
+      border-radius: var(--radius);
+      padding: 0.8rem 1rem;
+      background: #eef2ff;
+      margin-top: 1rem;
+    }
+    .active-poll-card .poll-prompt { font-weight: 700; margin-bottom: 0.6rem; }
+
+    /* Poll result bars (instructor sees live tally) */
+    .tally-row { margin-bottom: 0.5rem; }
+    .tally-label { display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--muted); margin-bottom: 0.15rem; }
+    .tally-bar-track { height: 18px; background: #e0e7ff; border-radius: 4px; overflow: hidden; }
+    .tally-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; min-width: 4px; }
+
+    /* ── Message feed ── */
+    .feed-scroll {
+      max-height: 400px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.25rem 0;
+    }
+    .feed-item {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 0.5rem 0.75rem;
+    }
+    .feed-item.is-reply { background: #f0f4ff; font-size: 0.92rem; margin-left: 1rem; }
+    .feed-meta { display: flex; gap: 0.5rem; align-items: baseline; margin-bottom: 0.1rem; }
+    .feed-author { font-weight: 700; font-size: 0.88rem; }
+    .feed-time { font-size: 0.78rem; color: var(--muted); }
+    .feed-body { word-break: break-word; white-space: pre-wrap; font-size: 0.95rem; }
+    .feed-empty { font-size: 0.9rem; color: var(--muted); text-align: center; padding: 1rem 0; }
+
+    /* ── Form shared elements ── */
+    .field { display: flex; flex-direction: column; gap: 0.3rem; }
+    label { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
+
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 0.65rem 0.9rem;
+      font-size: 1rem;
+      font-family: var(--font);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      font-family: var(--font);
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: var(--accent-fg); width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1.5px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--bg); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #991b1b; }
+    .btn-sm { min-height: 36px; padding: 0.4rem 0.9rem; font-size: 0.9rem; }
+
+    /* ── Alerts ── */
+    .alert { padding: 0.7rem 1rem; border-radius: var(--radius); font-size: 0.9rem; font-weight: 500; }
+    .alert-error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
+    .alert-success { background: #f0fdf4; color: var(--success); border: 1px solid #bbf7d0; }
+
+    /* ── End-session dialog ── */
+    .end-session-dialog {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      max-width: 340px;
+      width: calc(100% - 2rem);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .end-session-dialog::backdrop { background: rgba(0,0,0,0.4); }
+    .end-session-dialog h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .end-session-dialog p { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.25rem; }
+    .dialog-actions { display: flex; gap: 0.75rem; }
+    .dialog-actions .btn { flex: 1; width: auto; }
+
+    /* ── Visually hidden (a11y) ── */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    /* ── Loading ── */
+    .loading-msg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./instructor.js"></script>
+</body>
+</html>

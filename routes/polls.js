@@ -1,7 +1,7 @@
 'use strict';
 
 const { requireInstructor, requireStudent } = require('../lib/auth');
-const { broadcast } = require('../lib/sse');
+const { broadcast, broadcastToInstructors } = require('../lib/sse');
 
 async function pollRoutes(app) {
   // POST /poll — instructor creates a poll
@@ -89,6 +89,15 @@ async function pollRoutes(app) {
     db.prepare(
       'INSERT OR REPLACE INTO poll_votes (poll_id, username, choice) VALUES (?, ?, ?)'
     ).run(Number(poll_id), username, Number(choice));
+
+    // Broadcast live tally to instructor SSE connections only (students can't see results until poll closes)
+    const tallyRows = db.prepare(
+      'SELECT choice, COUNT(*) as votes FROM poll_votes WHERE poll_id = ? GROUP BY choice'
+    ).all(Number(poll_id));
+    const tallyMap = {};
+    for (const row of tallyRows) tallyMap[row.choice] = row.votes;
+    const tally = JSON.parse(poll.options).map((option, i) => ({ option, votes: tallyMap[i] || 0 }));
+    broadcastToInstructors({ type: 'vote_update', poll_id: Number(poll_id), tally });
 
     return reply.code(201).send({ ok: true });
   });
