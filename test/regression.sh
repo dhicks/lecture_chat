@@ -290,9 +290,16 @@ STATUS=$(http POST "$BASE/vote" -H "Authorization: Bearer $STU_ALICE" \
   -H "Content-Type: application/json" -d "{\"poll_id\":$POLL_ID,\"choice\":0}")
 check "POST /vote → 201" "201" "$STATUS"
 
+# Re-voting is allowed: replaces the existing vote (no 409)
 STATUS=$(http POST "$BASE/vote" -H "Authorization: Bearer $STU_ALICE" \
   -H "Content-Type: application/json" -d "{\"poll_id\":$POLL_ID,\"choice\":1}")
-check "POST /vote duplicate → 409" "409" "$STATUS"
+check "POST /vote change vote → 201" "201" "$STATUS"
+ALICE_VOTE_COUNT=$(sqlite3 "$TEST_DB" \
+  "SELECT COUNT(*) FROM poll_votes WHERE poll_id=$POLL_ID AND username='alice';")
+check "alice has exactly one vote row after re-vote" "1" "$ALICE_VOTE_COUNT"
+ALICE_CHOICE=$(sqlite3 "$TEST_DB" \
+  "SELECT choice FROM poll_votes WHERE poll_id=$POLL_ID AND username='alice';")
+check "alice's vote replaced to choice 1" "1" "$ALICE_CHOICE"
 
 # vote with poll from different session
 # insert a poll directly into a fake session to avoid multi-session ambiguity in the API
@@ -313,8 +320,11 @@ STATUS=$(http POST "$BASE/poll/$POLL_ID/close" -H "Authorization: Bearer $INST")
 check "POST /poll/:id/close → 200" "200" "$STATUS"
 CLOSE_RESULTS=$(jq '.poll.results | length' "$BODY")
 check "close response has results array" "3" "$CLOSE_RESULTS"
+# alice changed her vote to JS; bob voted Python — so Python=1, JS=1, Rust=0
 PY_VOTES=$(jq -r '.poll.results[] | select(.option == "Python") | .votes' "$BODY")
-check "Python vote count = 2" "2" "$PY_VOTES"
+check "Python vote count = 1 (bob only)" "1" "$PY_VOTES"
+JS_VOTES=$(jq -r '.poll.results[] | select(.option == "JS") | .votes' "$BODY")
+check "JS vote count = 1 (alice after re-vote)" "1" "$JS_VOTES"
 sleep 0.3
 sse_has ".type == \"poll_closed\" and .poll.id == $POLL_ID and (.poll.results | length) == 3" \
   && echo "PASS: poll_closed in SSE with results" \
