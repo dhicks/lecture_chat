@@ -2,13 +2,9 @@
 
 ## Phase 5 — Frontend (student)
 
-Largely complete. Outstanding polish items:
+Complete. Outstanding polish item for a future pass:
 
-- **Logout via username click** (`public/app.js` + new route `DELETE /session/leave`): Clicking the username badge in the chat header opens a native `<dialog>` with "Log out" and "Cancel" buttons. On log out: call `DELETE /session/leave` (removes the row from `session_users` so the username is freed), clear `localStorage`, return to join screen. Server route requires a valid student JWT; extracts `session_id` and `username` from the token claims.
-
-- **Poll re-voting** (`public/app.js` + `routes/polls.js`): After voting, show the options again with the current selection highlighted so students can change their answer. Requires server-side change: replace INSERT in `/vote` with INSERT OR REPLACE (upsert) to allow overwriting a prior vote.
-
-- **Dismiss poll results** (`public/app.js` PollCard): After `poll_closed` results are shown, add a "Dismiss" button so students can hide the results card without reloading.
+- **Poll card compaction after voting** (`public/app.js` PollCard): After voting, collapse the poll card to a compact "Change your response" button rather than showing the full form with a note. Clicking the button re-expands the form.
 
 ### Verify Phase 5
 - [x] Join screen: wrong PIN shows error message; correct PIN + username advances to chat
@@ -20,7 +16,10 @@ Largely complete. Outstanding polish items:
 - [x] Close poll via curl → results bar chart appears
 - [x] Hard-reload the page → chat feed restores last 50 messages; SSE reconnects
 - [x] End session via curl → student UI shows session-ended state
-- [X] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
+- [x] **A11y**: navigate the full student flow using only a keyboard (Tab, Enter, Space) — no mouse required
+- [x] Poll re-voting: vote → change answer → close poll → results reflect last vote
+- [x] Dismiss poll results: close poll → "Dismiss" button hides results card
+- [x] Logout: click username badge → dialog → "Log out" → localStorage cleared → join screen → rejoin with same username succeeds
 - [ ] **A11y**: run with a screen reader (VoiceOver on macOS) — new messages announced, reactions announced, poll announced, session-end announced
 
 ---

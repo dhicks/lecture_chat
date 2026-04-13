@@ -86,16 +86,9 @@ async function pollRoutes(app) {
       return reply.code(400).send({ error: 'Invalid choice index' });
     }
 
-    try {
-      db.prepare(
-        'INSERT INTO poll_votes (poll_id, username, choice) VALUES (?, ?, ?)'
-      ).run(Number(poll_id), username, Number(choice));
-    } catch (err) {
-      if (err.message.includes('UNIQUE constraint failed')) {
-        return reply.code(409).send({ error: 'Already voted on this poll' });
-      }
-      throw err;
-    }
+    db.prepare(
+      'INSERT OR REPLACE INTO poll_votes (poll_id, username, choice) VALUES (?, ?, ?)'
+    ).run(Number(poll_id), username, Number(choice));
 
     return reply.code(201).send({ ok: true });
   });

@@ -1,6 +1,6 @@
 'use strict';
 
-const { requireInstructor } = require('../lib/auth');
+const { requireInstructor, requireStudent } = require('../lib/auth');
 const { broadcast } = require('../lib/sse');
 
 async function sessionRoutes(app) {
@@ -34,6 +34,15 @@ async function sessionRoutes(app) {
 
     db.prepare("UPDATE chat_sessions SET ended_at = datetime('now') WHERE id = ?").run(session.id);
     broadcast(session.id, { type: 'session_ended' });
+    return { ok: true };
+  });
+
+  // DELETE /session/leave — student leaves the session (frees username slot)
+  app.delete('/leave', { preHandler: requireStudent }, async (req, reply) => {
+    const { session_id, username } = req.user;
+    const db = app.db;
+    db.prepare('DELETE FROM session_users WHERE session_id = ? AND username = ?')
+      .run(session_id, username);
     return { ok: true };
   });
 

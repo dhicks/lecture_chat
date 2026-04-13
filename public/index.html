@@ -99,6 +99,16 @@
     .btn-primary { background: var(--accent); color: var(--accent-fg); width: 100%; }
     .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
 
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1.5px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { background: var(--bg); }
+
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #991b1b; }
+
     /* ── Alerts ── */
     .alert { padding: 0.7rem 1rem; border-radius: var(--radius); font-size: 0.9rem; font-weight: 500; }
     .alert-error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
@@ -116,7 +126,19 @@
       flex-shrink: 0;
     }
     .chat-header h1 { font-size: 1.1rem; font-weight: 700; }
-    .chat-header .username-badge { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+    .chat-header .username-badge {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 500;
+      /* Reset button chrome while keeping muted text look */
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: var(--font);
+      text-decoration: underline dotted;
+    }
+    .chat-header .username-badge:hover { color: var(--text); }
 
     /* ── Message feed: grows, scrolls ── */
     .message-feed {
@@ -328,6 +350,24 @@
       color: var(--muted);
       font-size: 0.9rem;
     }
+
+    /* ── Poll dismiss button ── */
+    .poll-dismiss-btn { margin-top: 0.75rem; width: auto; min-width: 0; font-size: 0.9rem; padding: 0.4rem 1rem; }
+
+    /* ── Logout dialog ── */
+    .logout-dialog {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      max-width: 320px;
+      width: calc(100% - 2rem);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .logout-dialog::backdrop { background: rgba(0,0,0,0.4); }
+    .logout-dialog h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .logout-dialog p { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.25rem; }
+    .logout-dialog-actions { display: flex; gap: 0.75rem; }
+    .logout-dialog-actions .btn { flex: 1; width: auto; }
   </style>
 </head>
 <body>

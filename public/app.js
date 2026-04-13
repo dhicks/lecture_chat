@@ -39,7 +39,8 @@ function clearSession() {
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 async function apiFetch(path, { token, method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = {};
+  if (body != null) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(path, {
     method,
@@ -357,8 +358,9 @@ function MessageFeed({ messages, username, onReact, onSendReply, sessionEnded, f
 // PollCard ────────────────────────────────────────────────────────────────────
 
 function PollCard({ poll, results, voted, onVote }) {
-  const [selected, setSelected]     = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [selected, setSelected]         = useState(null);
+  const [submitting, setSubmitting]     = useState(false);
+  const [dismissed, setDismissed]       = useState(false);
   // alreadyVoted: true if server returned 409 (e.g. after page reload)
   const [alreadyVoted, setAlreadyVoted] = useState(false);
 
@@ -376,6 +378,7 @@ function PollCard({ poll, results, voted, onVote }) {
   }
 
   if (results) {
+    if (dismissed) return null;
     // results = { id, prompt, results: [{ option, votes }] }
     const rows  = results.results || [];
     const total = rows.reduce((s, r) => s + r.votes, 0);
@@ -415,6 +418,9 @@ function PollCard({ poll, results, voted, onVote }) {
               })}
             </tbody>
           </table>
+          <button class="btn btn-secondary poll-dismiss-btn" onClick=${() => setDismissed(true)}>
+            Dismiss
+          </button>
         </fieldset>
       </div>
     `;
@@ -422,45 +428,41 @@ function PollCard({ poll, results, voted, onVote }) {
 
   if (!poll) return null;
 
-  // Show open voting UI
+  // Show open voting UI — always show the form so students can change their vote
   return html`
     <div class="poll-card" role="region" aria-label="Active poll">
-      ${(voted || alreadyVoted)
-        ? html`
-          <p class="poll-waiting" aria-live="polite">
-            ✓ Vote recorded — waiting for results…
-          </p>
-        `
-        : html`
-          <form onSubmit=${handleVote}>
-            <fieldset>
-              <legend>${poll.prompt}</legend>
-              <div class="poll-options">
-                ${poll.options.map((opt, i) => html`
-                  <label key=${i} class="poll-option-label">
-                    <input
-                      type="radio"
-                      name=${`poll-${poll.id}`}
-                      value=${i}
-                      checked=${selected === i}
-                      onChange=${() => setSelected(i)}
-                      disabled=${submitting}
-                    />
-                    ${opt}
-                  </label>
-                `)}
-              </div>
-              <button
-                class="btn btn-primary"
-                type="submit"
-                disabled=${selected === null || submitting}
-              >
-                ${submitting ? 'Submitting…' : 'Submit vote'}
-              </button>
-            </fieldset>
-          </form>
-        `
-      }
+      <form onSubmit=${handleVote}>
+        <fieldset>
+          <legend>${poll.prompt}</legend>
+          <div class="poll-options">
+            ${poll.options.map((opt, i) => html`
+              <label key=${i} class="poll-option-label">
+                <input
+                  type="radio"
+                  name=${`poll-${poll.id}`}
+                  value=${i}
+                  checked=${selected === i}
+                  onChange=${() => setSelected(i)}
+                  disabled=${submitting}
+                />
+                ${opt}
+              </label>
+            `)}
+          </div>
+          <button
+            class="btn btn-primary"
+            type="submit"
+            disabled=${selected === null || submitting}
+          >
+            ${submitting ? 'Submitting…' : 'Submit vote'}
+          </button>
+        </fieldset>
+      </form>
+      ${(voted || alreadyVoted) && html`
+        <p class="poll-waiting" aria-live="polite">
+          ✓ Vote recorded — you can change your answer above.
+        </p>
+      `}
     </div>
   `;
 }
@@ -518,6 +520,47 @@ function MessageInput({ onSend, sessionEnded, inputRef }) {
   `;
 }
 
+// LogoutDialog ────────────────────────────────────────────────────────────────
+
+function LogoutDialog({ onLogout, onCancel, triggerRef }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    // Browser fires 'cancel' on Escape and closes the dialog automatically
+    function handleCancel() {
+      triggerRef.current?.focus();
+      onCancel();
+    }
+    dialog.addEventListener('cancel', handleCancel);
+    return () => dialog.removeEventListener('cancel', handleCancel);
+  }, []);
+
+  function dismiss() {
+    dialogRef.current?.close();
+    triggerRef.current?.focus();
+    onCancel();
+  }
+
+  async function handleLogout() {
+    dialogRef.current?.close();
+    await onLogout();
+  }
+
+  return html`
+    <dialog ref=${dialogRef} class="logout-dialog" aria-labelledby="logout-dialog-title">
+      <h2 id="logout-dialog-title">Log out?</h2>
+      <p>You will return to the join screen.</p>
+      <div class="logout-dialog-actions">
+        <button class="btn btn-danger" onClick=${handleLogout}>Log out</button>
+        <button class="btn btn-secondary" onClick=${dismiss}>Cancel</button>
+      </div>
+    </dialog>
+  `;
+}
+
 // ChatScreen ──────────────────────────────────────────────────────────────────
 
 function ChatScreen({ token, username, pin, onSessionEnd }) {
@@ -528,9 +571,12 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [loadError, setLoadError]       = useState('');
 
-  const feedRef    = useRef(null);
-  const inputRef   = useRef(null);
-  const sseRef     = useRef(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  const feedRef      = useRef(null);
+  const inputRef     = useRef(null);
+  const sseRef       = useRef(null);
+  const logoutBtnRef = useRef(null);
   // Track whether user has scrolled up (to suppress auto-scroll)
   const userScrolledUp = useRef(false);
 
@@ -674,6 +720,16 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
     setVotedPollId(pollId);
   }
 
+  async function handleLogout() {
+    try {
+      await apiFetch('/session/leave', { token, method: 'DELETE' });
+    } catch (_) {
+      // Clear local session regardless of server response
+    }
+    clearSession();
+    onSessionEnd();
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return html`
@@ -682,9 +738,24 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         <h1>Lecture Chat</h1>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.1rem;">
           ${pin && html`<span style="font-size:0.75rem; font-weight:700; color:var(--accent); letter-spacing:0.1em;">PIN: ${pin}</span>`}
-          <span class="username-badge" aria-label=${`Signed in as ${username}`}>${username}</span>
+          <button
+            ref=${logoutBtnRef}
+            class="username-badge"
+            aria-label=${`Signed in as ${username}. Click to log out.`}
+            onClick=${() => setShowLogoutDialog(true)}
+          >
+            ${username}
+          </button>
         </div>
       </header>
+
+      ${showLogoutDialog && html`
+        <${LogoutDialog}
+          onLogout=${handleLogout}
+          onCancel=${() => setShowLogoutDialog(false)}
+          triggerRef=${logoutBtnRef}
+        />
+      `}
 
       ${loadError && html`
         <div class="alert alert-error" role="alert" aria-live="assertive" style="margin: 0.75rem;">
