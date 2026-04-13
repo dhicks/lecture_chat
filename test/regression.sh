@@ -104,18 +104,28 @@ check "second session/start while one active → 409" "409" "$STATUS"
   && echo "PASS: 4-digit PIN returned ($PIN)" \
   || { echo "FAIL: PIN not 4 digits ($PIN)"; FAILURES=$((FAILURES + 1)); }
 
+# Happy path: new username joins successfully
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
   -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
 check "/join valid → 200" "200" "$STATUS"
 STU_ALICE=$(jq -r .token "$BODY")
 
+# Collision: username still active → rejected
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
   -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
-check "/join duplicate username (rejoin) → 200" "200" "$STATUS"
-REJOIN_TOKEN=$(jq -r .token "$BODY")
-[[ -n "$REJOIN_TOKEN" && "$REJOIN_TOKEN" != "null" ]] \
-  && echo "PASS: rejoin issues a fresh JWT" \
-  || { echo "FAIL: rejoin did not return a JWT"; FAILURES=$((FAILURES + 1)); }
+check "/join duplicate username (collision) → 409" "409" "$STATUS"
+
+# Leave then rejoin: alice leaves, freeing her username slot; rejoins successfully
+STATUS=$(http DELETE "$BASE/session/leave" -H "Authorization: Bearer $STU_ALICE")
+check "DELETE /session/leave → 200" "200" "$STATUS"
+
+STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
+  -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
+check "/join after leave → 200" "200" "$STATUS"
+STU_ALICE=$(jq -r .token "$BODY")
+[[ -n "$STU_ALICE" && "$STU_ALICE" != "null" ]] \
+  && echo "PASS: rejoin after leave issues a fresh JWT" \
+  || { echo "FAIL: rejoin after leave did not return a JWT"; FAILURES=$((FAILURES + 1)); }
 
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
   -d '{"session_pin":"0000","username":"nobody"}')
