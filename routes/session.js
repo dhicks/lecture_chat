@@ -30,7 +30,25 @@ async function sessionRoutes(app) {
       };
     }
 
-    return { session: { id: session.id, pin: session.session_pin }, active_poll };
+    const closedPollRows = db.prepare(
+      'SELECT id, prompt, options FROM polls WHERE session_id = ? AND closed_at IS NOT NULL ORDER BY created_at ASC'
+    ).all(session.id);
+
+    const closed_polls = closedPollRows.map(p => {
+      const opts = JSON.parse(p.options);
+      const voteCounts = db.prepare(
+        'SELECT choice, COUNT(*) as votes FROM poll_votes WHERE poll_id = ? GROUP BY choice'
+      ).all(p.id);
+      const countMap = {};
+      for (const row of voteCounts) countMap[row.choice] = row.votes;
+      return {
+        id: p.id,
+        prompt: p.prompt,
+        results: opts.map((option, i) => ({ option, votes: countMap[i] || 0 })),
+      };
+    });
+
+    return { session: { id: session.id, pin: session.session_pin }, active_poll, closed_polls };
   });
 
   // POST /session/start

@@ -411,9 +411,72 @@ function ActivePollCard({ token, poll, onPollClosed }) {
   `;
 }
 
+// ClosedPollsList ─────────────────────────────────────────────────────────────
+
+function ClosedPollsList({ polls }) {
+  const [expandedId, setExpandedId] = useState(null);
+
+  function toggle(id) {
+    setExpandedId(prev => prev === id ? null : id);
+  }
+
+  return html`
+    <div class="closed-polls-list">
+      <p class="closed-polls-heading">
+        Closed poll${polls.length !== 1 ? 's' : ''} (${polls.length})
+      </p>
+      ${polls.map(poll => {
+        const isOpen = expandedId === poll.id;
+        const resultsId = `closed-poll-results-${poll.id}`;
+        const totalVotes = poll.results.reduce((s, r) => s + r.votes, 0);
+        return html`
+          <div key=${poll.id}>
+            <button
+              class="closed-poll-toggle"
+              type="button"
+              aria-expanded=${isOpen}
+              aria-controls=${resultsId}
+              onClick=${() => toggle(poll.id)}
+            >
+              <span aria-hidden="true">${isOpen ? '▾' : '▸'}</span>
+              ${poll.prompt}
+            </button>
+            <div id=${resultsId} class="closed-poll-results" hidden=${!isOpen}>
+              ${poll.results.map((row, i) => {
+                const pct = totalVotes > 0 ? Math.round((row.votes / totalVotes) * 100) : 0;
+                return html`
+                  <div key=${i} class="tally-row">
+                    <div class="tally-label">
+                      <span>${row.option}</span>
+                      <span>${row.votes} vote${row.votes !== 1 ? 's' : ''} (${pct}%)</span>
+                    </div>
+                    <div class="tally-bar-track" role="presentation">
+                      <div class="tally-bar-fill" style=${`width:${pct}%`}></div>
+                    </div>
+                  </div>
+                `;
+              })}
+              <table class="sr-only">
+                <caption>Results for: ${poll.prompt}</caption>
+                <thead><tr><th>Option</th><th>Votes</th><th>Percent</th></tr></thead>
+                <tbody>
+                  ${poll.results.map((row, i) => {
+                    const pct = totalVotes > 0 ? Math.round((row.votes / totalVotes) * 100) : 0;
+                    return html`<tr key=${i}><td>${row.option}</td><td>${row.votes}</td><td>${pct}%</td></tr>`;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      })}
+    </div>
+  `;
+}
+
 // PollPanel ───────────────────────────────────────────────────────────────────
 
-function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }) {
+function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, onPollClosed }) {
   const [prompt, setPrompt]     = useState('');
   const [options, setOptions]   = useState(['', '']);
   const [busy, setBusy]         = useState(false);
@@ -467,7 +530,7 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
         <p style="font-size:0.9rem; color:var(--muted);">Start a session to create polls.</p>
       `}
 
-      ${sessionId && html`
+      ${sessionId && !activePoll && html`
         <form class="poll-builder-form" onSubmit=${handleSubmit} novalidate>
           <div class="field">
             <label for="poll-prompt">Question</label>
@@ -477,7 +540,7 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
               placeholder="Ask a question…"
               value=${prompt}
               onInput=${e => setPrompt(e.target.value)}
-              disabled=${busy || !!activePoll}
+              disabled=${busy}
               maxlength="300"
             />
           </div>
@@ -495,7 +558,7 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
                   placeholder=${`Option ${i + 1}`}
                   value=${opt}
                   onInput=${e => updateOption(i, e.target.value)}
-                  disabled=${busy || !!activePoll}
+                  disabled=${busy}
                   maxlength="200"
                 />
                 ${options.length > 2 && html`
@@ -504,12 +567,12 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
                     type="button"
                     aria-label=${`Remove option ${i + 1}`}
                     onClick=${() => removeOption(i)}
-                    disabled=${busy || !!activePoll}
+                    disabled=${busy}
                   >−</button>
                 `}
               </div>
             `)}
-            ${options.length < 4 && !activePoll && html`
+            ${options.length < 4 && html`
               <button
                 class="btn btn-secondary btn-sm"
                 type="button"
@@ -528,16 +591,11 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
           ${success && html`
             <div class="alert alert-success" role="status" aria-live="polite">${success}</div>
           `}
-          ${activePoll && html`
-            <div class="alert alert-error" role="status">
-              Close the active poll before creating a new one.
-            </div>
-          `}
 
           <button
             class="btn btn-primary"
             type="submit"
-            disabled=${busy || !!activePoll || !prompt.trim()}
+            disabled=${busy || !prompt.trim()}
           >
             ${busy ? 'Creating…' : 'Send poll to students'}
           </button>
@@ -551,6 +609,10 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
           onPollClosed=${onPollClosed}
         />
       `}
+
+      ${closedPolls?.length > 0 && html`
+        <${ClosedPollsList} polls=${closedPolls} />
+      `}
     </section>
   `;
 }
@@ -559,6 +621,7 @@ function PollPanel({ token, sessionId, activePoll, onPollCreated, onPollClosed }
 
 function MessageFeed({ messages }) {
   const feedRef = useRef(null);
+  const [expandedReplies, setExpandedReplies] = useState(new Set());
 
   useEffect(() => {
     const el = feedRef.current;
@@ -566,13 +629,13 @@ function MessageFeed({ messages }) {
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // Flatten messages and replies into a single log-style list
-  const flatItems = [];
-  for (const m of messages) {
-    flatItems.push({ ...m, isReply: false });
-    for (const r of m.replies || []) {
-      flatItems.push({ ...r, isReply: true });
-    }
+  function toggleReplies(msgId) {
+    setExpandedReplies(prev => {
+      const next = new Set(prev);
+      if (next.has(msgId)) next.delete(msgId);
+      else next.add(msgId);
+      return next;
+    });
   }
 
   return html`
@@ -586,22 +649,48 @@ function MessageFeed({ messages }) {
         aria-relevant="additions"
         role="log"
       >
-        ${flatItems.length === 0
+        ${messages.length === 0
           ? html`<p class="feed-empty">No messages yet.</p>`
-          : flatItems.map(item => html`
-            <div
-              key=${item.id}
-              class=${`feed-item${item.isReply ? ' is-reply' : ''}`}
-            >
-              <div class="feed-meta">
-                <span class="feed-author">${item.isReply ? '↳ ' : ''}${item.username}</span>
-                <time class="feed-time" datetime=${item.created_at}>
-                  ${formatTime(item.created_at)}
-                </time>
+          : messages.map(msg => {
+            const replyCount = (msg.replies || []).length;
+            const isExpanded = expandedReplies.has(msg.id);
+            const repliesId = `replies-${msg.id}`;
+            return html`
+              <div key=${msg.id} class="feed-item">
+                <div class="feed-meta">
+                  <span class="feed-author">${msg.username}</span>
+                  <time class="feed-time" datetime=${msg.created_at}>
+                    ${formatTime(msg.created_at)}
+                  </time>
+                </div>
+                <p class="feed-body">${msg.body}</p>
+                ${replyCount > 0 && html`
+                  <button
+                    class="btn-replies-toggle"
+                    type="button"
+                    aria-expanded=${isExpanded}
+                    aria-controls=${repliesId}
+                    onClick=${() => toggleReplies(msg.id)}
+                  >
+                    ${isExpanded ? '▾' : '▸'} ${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}
+                  </button>
+                  <div id=${repliesId} hidden=${!isExpanded}>
+                    ${(msg.replies || []).map(r => html`
+                      <div key=${r.id} class="feed-item is-reply">
+                        <div class="feed-meta">
+                          <span class="feed-author">↳ ${r.username}</span>
+                          <time class="feed-time" datetime=${r.created_at}>
+                            ${formatTime(r.created_at)}
+                          </time>
+                        </div>
+                        <p class="feed-body">${r.body}</p>
+                      </div>
+                    `)}
+                  </div>
+                `}
               </div>
-              <p class="feed-body">${item.body}</p>
-            </div>
-          `)
+            `;
+          })
         }
       </div>
     </section>
@@ -664,6 +753,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   const [session, setSession]       = useState(initialSession);
   const [messages, setMessages]     = useState([]);
   const [activePoll, setActivePoll] = useState(null);
+  const [closedPolls, setClosedPolls] = useState([]);
 
   const sseRef = useRef(null);
 
@@ -672,7 +762,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
 
   useEffect(() => {
     apiFetch('/session/active', { token })
-      .then(({ session: serverSession, active_poll }) => {
+      .then(({ session: serverSession, active_poll, closed_polls }) => {
         if (serverSession) {
           // Server has an active session — use it regardless of localStorage
           if (!session || session.id !== serverSession.id) {
@@ -680,6 +770,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
             setSession(serverSession);
           }
           if (active_poll) setActivePoll(active_poll);
+          if (closed_polls?.length) setClosedPolls(closed_polls);
         } else {
           // No active session on server — clear any stale localStorage state
           if (session) {
@@ -721,6 +812,11 @@ function DashboardScreen({ token, initialSession, onLogout }) {
         setActivePoll({ ...event.poll, tally: event.poll.options.map(option => ({ option, votes: 0 })) });
         break;
       case 'poll_closed':
+        if (event.poll) {
+          setClosedPolls(prev =>
+            prev.some(p => p.id === event.poll.id) ? prev : [...prev, event.poll]
+          );
+        }
         setActivePoll(null);
         break;
       case 'session_ended':
@@ -760,12 +856,14 @@ function DashboardScreen({ token, initialSession, onLogout }) {
     setSession(newSession);
     setMessages([]);
     setActivePoll(null);
+    setClosedPolls([]);
   }
 
   function handleSessionEnded() {
     setSession(null);
     setMessages([]);
     setActivePoll(null);
+    setClosedPolls([]);
     sseRef.current?.stop();
   }
 
@@ -792,24 +890,29 @@ function DashboardScreen({ token, initialSession, onLogout }) {
       </header>
 
       <main class="dash-main">
-        <${SessionPanel}
-          token=${token}
-          session=${session}
-          onSessionStarted=${handleSessionStarted}
-          onSessionEnded=${handleSessionEnded}
-        />
+        <div class="dash-left">
+          <${SessionPanel}
+            token=${token}
+            session=${session}
+            onSessionStarted=${handleSessionStarted}
+            onSessionEnded=${handleSessionEnded}
+          />
 
-        <${PollPanel}
-          token=${token}
-          sessionId=${session?.id}
-          activePoll=${activePoll}
-          onPollCreated=${handlePollCreated}
-          onPollClosed=${handlePollClosed}
-        />
+          <${PollPanel}
+            token=${token}
+            sessionId=${session?.id}
+            activePoll=${activePoll}
+            closedPolls=${closedPolls}
+            onPollCreated=${handlePollCreated}
+            onPollClosed=${handlePollClosed}
+          />
 
-        <${MessageFeed} messages=${messages} />
+          <${ExportButton} token=${token} sessionId=${session?.id} />
+        </div>
 
-        <${ExportButton} token=${token} sessionId=${session?.id} />
+        <div class="dash-right">
+          <${MessageFeed} messages=${messages} />
+        </div>
       </main>
     </div>
   `;
