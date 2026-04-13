@@ -28,7 +28,7 @@ Complete. Outstanding polish item for a future pass:
 
 ### Bugs
 
-- [ ] **Session state on login**: Logging into the instructor UI while a session is already active (e.g. started via curl or another browser) shows "No active session." Clicking "Start session" returns a 409 with no way to end it. Fix: fetch `GET /session/active` on dashboard mount and populate state from server. Requires a new `GET /session/active` backend endpoint.
+- [x] **Session state on login**: Logging into the instructor UI while a session is already active (e.g. started via curl or another browser) shows "No active session." Clicking "Start session" returns a 409 with no way to end it. Fix: fetch `GET /session/active` on dashboard mount and populate state from server. Requires a new `GET /session/active` backend endpoint.
 - [ ] **Polls not pushed to students**: When the instructor creates a poll from the UI, students must manually refresh to see it. Results are also not pushed on close. Root cause unknown — SSE delivers events correctly via curl; likely a stale-JWT / session-mismatch issue from repeated server restarts during testing. Needs a clean retest, and possibly a 401 handler in `ChatScreen` that clears state and redirects to the join screen.
 - [ ] **Session-end not pushed to students**: When the instructor ends the session, students are not notified and attempts to post messages silently fail. Same suspected root cause as poll-push bug above.
 

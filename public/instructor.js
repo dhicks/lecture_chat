@@ -668,6 +668,32 @@ function DashboardScreen({ token, initialSession, onLogout }) {
 
   const sseRef = useRef(null);
 
+  // ── Reconcile session state with server on mount ────────────────────────────
+  // localStorage may be stale (session started in another tab/via curl, or server restarted).
+
+  useEffect(() => {
+    apiFetch('/session/active', { token })
+      .then(({ session: serverSession, active_poll }) => {
+        if (serverSession) {
+          // Server has an active session — use it regardless of localStorage
+          if (!session || session.id !== serverSession.id) {
+            saveInstructorActiveSession(serverSession);
+            setSession(serverSession);
+          }
+          if (active_poll) setActivePoll(active_poll);
+        } else {
+          // No active session on server — clear any stale localStorage state
+          if (session) {
+            clearInstructorActiveSession();
+            setSession(null);
+          }
+        }
+      })
+      .catch(err => {
+        if (err.status === 401) onLogout();
+      });
+  }, []);
+
   // ── SSE event handler ───────────────────────────────────────────────────────
 
   const handleSseEvent = useCallback((event) => {

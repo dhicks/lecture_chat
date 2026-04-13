@@ -4,6 +4,35 @@ const { requireInstructor, requireStudent } = require('../lib/auth');
 const { broadcast } = require('../lib/sse');
 
 async function sessionRoutes(app) {
+  // GET /session/active — returns current active session + active poll, or nulls
+  app.get('/active', { preHandler: requireInstructor }, async (req, reply) => {
+    const db = app.db;
+    const session = db.prepare('SELECT id, session_pin FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
+    if (!session) return { session: null, active_poll: null };
+
+    const pollRow = db.prepare(
+      'SELECT id, prompt, options FROM polls WHERE session_id = ? AND closed_at IS NULL ORDER BY created_at DESC LIMIT 1'
+    ).get(session.id);
+
+    let active_poll = null;
+    if (pollRow) {
+      const opts = JSON.parse(pollRow.options);
+      const tallyRows = db.prepare(
+        'SELECT choice, COUNT(*) as votes FROM poll_votes WHERE poll_id = ? GROUP BY choice'
+      ).all(pollRow.id);
+      const tallyMap = {};
+      for (const row of tallyRows) tallyMap[row.choice] = row.votes;
+      active_poll = {
+        id: pollRow.id,
+        prompt: pollRow.prompt,
+        options: opts,
+        tally: opts.map((option, i) => ({ option, votes: tallyMap[i] || 0 })),
+      };
+    }
+
+    return { session: { id: session.id, pin: session.session_pin }, active_poll };
+  });
+
   // POST /session/start
   app.post('/start', { preHandler: requireInstructor }, async (req, reply) => {
     const db = app.db;
