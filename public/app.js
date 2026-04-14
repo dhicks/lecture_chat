@@ -93,6 +93,12 @@ function createSseClient(token, onEvent) {
           }
         }
       }
+      // Server closed connection cleanly (done:true) — reconnect with backoff
+      if (!stopped) {
+        await new Promise(r => setTimeout(r, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 30000);
+        connect();
+      }
     } catch (err) {
       if (err.name === 'AbortError' || stopped) return;
       // Reconnect with exponential backoff (cap at 30s)
@@ -671,7 +677,12 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         ...m,
         replies: m.replies || [],
       }));
-      setMessages(normalized);
+      // Merge with any SSE-delivered messages that arrived before this fetch resolved
+      setMessages(prev => {
+        const ids = new Set(normalized.map(m => m.id));
+        const sseOnly = prev.filter(m => !ids.has(m.id));
+        return [...normalized, ...sseOnly].sort((a, b) => a.id - b.id);
+      });
       if (data.active_poll) setActivePoll(data.active_poll);
     } catch (err) {
       if (err.status === 401) {
@@ -693,11 +704,9 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   // ── On mount ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    loadMessages().then(() => {
-      connectSse();
-      // Move focus to message input
-      setTimeout(() => inputRef.current?.focus(), 100);
-    });
+    connectSse(); // Register with server immediately — don't wait for message load
+    loadMessages();
+    setTimeout(() => inputRef.current?.focus(), 100);
     return () => sseRef.current?.stop();
   }, []);
 

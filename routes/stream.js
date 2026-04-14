@@ -30,6 +30,7 @@ async function streamRoutes(app) {
       session_id = req.user.session_id;
     }
 
+    reply.hijack(); // Take full control — prevent Fastify from finalizing the response
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',

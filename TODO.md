@@ -2,7 +2,66 @@
 
 ## Bugs
 
-- **Intermittent: student view not updating in real time** — SSE events (new messages, reactions, polls) sometimes fail to appear on the student side without a page reload. Observed 2026-04-12 evening, stopped, then recurred 2026-04-13 morning. Needs a reliable reproduction case before attempting a fix. Suspected areas: SSE reconnect logic in `public/app.js` `createSseClient`, or the server-side broadcast in `lib/sse.js` dropping clients silently.
+### **Intermittent: instructor and student views not always updating in real time** 
+
+SSE events (new messages, reactions, polls) sometimes fail to appear without a page reload. This behavior appears to start and stop inconsistently. A potentially related point is that, if a session is active when the server is stopped, that session will be active when the server is restarted. 
+
+Previous Claude Code sessions have considered the following causes: 
+
+#### Ruled out (code changes made, browser issue persists)
+
+1. **Server-side broadcast pipeline** — integration tests confirm all four SSE event types deliver correctly via Node's `fetch` + `ReadableStream` against the real Fastify server. Server is not dropping events.
+
+2. **`broadcastToInstructors` dead client accumulation** — fixed (`lib/sse.js`), unit-tested, confirmed working.
+
+3. **SSE client not reconnecting on clean server close** — fixed in `public/app.js` (post-loop reconnect block added), unit-tested, confirmed working.
+
+4. **`handleSseEvent` stale closure** — analyzed; not a bug. All state updates use functional updaters (`setMessages(prev => ...)`), so the empty-dep `useCallback` is safe.
+
+5. **`reply.hijack()` missing from stream route** — added to `routes/stream.js`; didn't resolve browser symptoms.
+
+6. **`loadMessages().then(connectSse)` race** — fixed in `public/app.js`; SSE now registers before the message-fetch begins. Didn't resolve browser symptoms.
+
+7. **`loadMessages()` replacing state** — fixed to merge instead of overwrite. Didn't resolve browser symptoms.
+
+#### Identified, not yet tested
+
+1. **Instructor's `createSseClient` missing the clean-close reconnect fix** — `public/instructor.js:89–94` only reconnects in the `catch` block; the `done: true` (clean close) path breaks out of the loop with no reconnect. The fix was applied to `app.js` but never ported to `instructor.js`.
+
+2. **Instructor SSE not connected on initial load from localStorage** — the SSE effect (line 954) depends on `[session?.id]`. But the reconcile effect (line 877) runs concurrently and calls `/session/active`; if that response arrives and calls `setSession()` with the same `session.id`, the effect doesn't re-run. It's unclear whether the instructor's SSE is actually registered with the server by the time messages are being broadcast. No logging or diagnostics have been added to confirm.
+
+3. **`/session/active` returns `{ id, pin }` but localStorage session was saved as `{ id, session_pin }`** — `SessionPanel` saves `{ id: data.session_id, pin: data.session_pin }` (line 243). The reconcile compare is `session.id !== serverSession.id`, which uses only `id`, so this mismatch wouldn't affect the comparison — but worth confirming the shapes are consistent throughout.
+
+4. **Root cause of browser-specific failures still unknown** — all server-side tests pass; the bug is confirmed frontend-only, but no browser-side diagnostics (console logs on SSE connect/disconnect/event receipt) have been added to pinpoint exactly where the failure occurs.
+
+#### Additional notes from previous sessions
+
+##### What's already been changed (don't re-investigate or revert)
+
+- `routes/stream.js` — `reply.hijack()` added before `reply.raw.writeHead()`
+- `public/app.js` — `connectSse()` now called before `loadMessages()` in the mount effect; `loadMessages()` merges state instead of replacing it
+- `public/app.js` — clean-close reconnect fix (post-loop reconnect block in `createSseClient`)
+- `lib/sse.js` — `broadcastToInstructors` now removes dead clients on write failure
+- `test/sse.test.js` and `test/integration.test.js` — new test files; `npm test` runs all 6 and passes
+
+##### Recommended first step
+
+Add `console.log` diagnostics in both `createSseClient` functions (connect attempt, successful connect, disconnect/error, each received event) before making any more code changes. The symptoms haven't been directly observed at the JS level — only inferred from UI behavior. Diagnostics should confirm whether SSE is connecting at all, disconnecting unexpectedly, or connecting but not receiving events.
+
+##### Key symptom (reported after the fixes above were applied)
+
+The problem is most visible after server restart with stale localStorage:
+- Student view works correctly
+- Instructor view requires a page refresh to see student posts
+- Switching to a fresh browser (no localStorage) works correctly
+
+This strongly suggests the bug is in the instructor dashboard's initialization path when restoring from localStorage, not in the general SSE machinery.
+
+##### Test suite
+
+`npm test` runs `test/sse.test.js` and `test/integration.test.js`. The integration tests use port 3999 and `/tmp/lecture_chat_integration_test.db` to avoid colliding with a running dev server.
+
+
 
 ---
 
