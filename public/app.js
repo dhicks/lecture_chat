@@ -361,8 +361,9 @@ function PollCard({ poll, results, voted, onVote }) {
   const [selected, setSelected]         = useState(null);
   const [submitting, setSubmitting]     = useState(false);
   const [dismissed, setDismissed]       = useState(false);
-  // alreadyVoted: true if server returned 409 (e.g. after page reload)
-  const [alreadyVoted, setAlreadyVoted] = useState(false);
+  // collapsed: true after voting — shows compact button instead of full form
+  // initialized from voted prop to handle page-reload case
+  const [collapsed, setCollapsed] = useState(!!voted);
 
   async function handleVote(e) {
     e.preventDefault();
@@ -370,8 +371,9 @@ function PollCard({ poll, results, voted, onVote }) {
     setSubmitting(true);
     try {
       await onVote(poll.id, selected);
+      setCollapsed(true);
     } catch (err) {
-      if (err.status === 409) setAlreadyVoted(true);
+      if (err.status === 409) setCollapsed(true);
     } finally {
       setSubmitting(false);
     }
@@ -428,7 +430,18 @@ function PollCard({ poll, results, voted, onVote }) {
 
   if (!poll) return null;
 
-  // Show open voting UI — always show the form so students can change their vote
+  if (collapsed) {
+    return html`
+      <div class="poll-card poll-card--compact" role="region" aria-label="Active poll">
+        <p class="poll-voted-summary">✓ ${poll.prompt}</p>
+        <button class="btn btn-secondary" onClick=${() => setCollapsed(false)}>
+          Change your response
+        </button>
+      </div>
+    `;
+  }
+
+  // Show open voting UI
   return html`
     <div class="poll-card" role="region" aria-label="Active poll">
       <form onSubmit=${handleVote}>
@@ -458,11 +471,6 @@ function PollCard({ poll, results, voted, onVote }) {
           </button>
         </fieldset>
       </form>
-      ${(voted || alreadyVoted) && html`
-        <p class="poll-waiting" aria-live="polite">
-          ✓ Vote recorded — you can change your answer above.
-        </p>
-      `}
     </div>
   `;
 }

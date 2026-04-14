@@ -8,9 +8,7 @@
 
 ## Phase 5 — Frontend (student)
 
-Complete. Outstanding polish item for a future pass:
-
-- **Poll card compaction after voting** (`public/app.js` PollCard): After voting, collapse the poll card to a compact "Change your response" button rather than showing the full form with a note. Clicking the button re-expands the form.
+Complete.
 
 ### Verify Phase 5
 - [ ] **A11y**: run with a screen reader (VoiceOver on macOS) — new messages announced, reactions announced, poll announced, session-end announced
