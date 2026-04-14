@@ -58,12 +58,14 @@ function createSseClient(token, onEvent) {
   async function connect() {
     if (stopped) return;
     abortCtrl = new AbortController();
+    console.log('[SSE:instructor] connecting…');
     try {
       const res = await fetch('/stream', {
         headers: { 'Authorization': `Bearer ${token}` },
         signal: abortCtrl.signal,
       });
       if (!res.ok || !res.body) throw new Error(`SSE status ${res.status}`);
+      console.log('[SSE:instructor] connected');
       retryDelay = 250;
 
       const reader = res.body.getReader();
@@ -82,12 +84,24 @@ function createSseClient(token, onEvent) {
             if (line.startsWith('data: ')) data += line.slice(6);
           }
           if (data) {
-            try { onEvent(JSON.parse(data)); } catch (_) {}
+            try {
+              const evt = JSON.parse(data);
+              console.log('[SSE:instructor] event:', evt);
+              onEvent(evt);
+            } catch (_) {}
           }
         }
       }
+      // Server closed connection cleanly (done:true) — reconnect with backoff
+      if (!stopped) {
+        console.log(`[SSE:instructor] clean close, reconnecting in ${retryDelay}ms`);
+        await new Promise(r => setTimeout(r, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 30000);
+        connect();
+      }
     } catch (err) {
       if (err.name === 'AbortError' || stopped) return;
+      console.log(`[SSE:instructor] error, reconnecting in ${retryDelay}ms:`, err);
       await new Promise(r => setTimeout(r, retryDelay));
       retryDelay = Math.min(retryDelay * 2, 30000);
       connect();
@@ -952,6 +966,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   // ── Connect SSE and load messages on session change ─────────────────────────
 
   useEffect(() => {
+    console.log('[SSE:instructor] session effect running, session.id=', session?.id);
     if (!session) return;
 
     (async () => {

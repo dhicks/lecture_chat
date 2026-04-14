@@ -64,12 +64,14 @@ function createSseClient(token, onEvent) {
   async function connect() {
     if (stopped) return;
     abortCtrl = new AbortController();
+    console.log('[SSE:student] connecting…');
     try {
       const res = await fetch('/stream', {
         headers: { 'Authorization': `Bearer ${token}` },
         signal: abortCtrl.signal,
       });
       if (!res.ok || !res.body) throw new Error(`SSE status ${res.status}`);
+      console.log('[SSE:student] connected');
       retryDelay = 250; // reset on successful connect
 
       const reader = res.body.getReader();
@@ -89,18 +91,24 @@ function createSseClient(token, onEvent) {
             if (line.startsWith('data: ')) data += line.slice(6);
           }
           if (data) {
-            try { onEvent(JSON.parse(data)); } catch (_) {}
+            try {
+              const evt = JSON.parse(data);
+              console.log('[SSE:student] event:', evt);
+              onEvent(evt);
+            } catch (_) {}
           }
         }
       }
       // Server closed connection cleanly (done:true) — reconnect with backoff
       if (!stopped) {
+        console.log(`[SSE:student] clean close, reconnecting in ${retryDelay}ms`);
         await new Promise(r => setTimeout(r, retryDelay));
         retryDelay = Math.min(retryDelay * 2, 30000);
         connect();
       }
     } catch (err) {
       if (err.name === 'AbortError' || stopped) return;
+      console.log(`[SSE:student] error, reconnecting in ${retryDelay}ms:`, err);
       // Reconnect with exponential backoff (cap at 30s)
       await new Promise(r => setTimeout(r, retryDelay));
       retryDelay = Math.min(retryDelay * 2, 30000);
