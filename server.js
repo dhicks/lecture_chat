@@ -45,6 +45,14 @@ app.register(require('@fastify/static'), {
   root: path.join(__dirname, 'public'),
   prefix: '/',
 });
+app.register(require('@fastify/rate-limit'), {
+  global: true,
+  max: 60,
+  timeWindow: '1 minute',
+  errorResponseBuilder: (_req, context) => ({
+    error: `Too many requests — try again in ${context.after}`,
+  }),
+});
 
 // Make db available to routes via decorator
 app.decorate('db', db);

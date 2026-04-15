@@ -4,7 +4,7 @@ const { hashPin, checkPin } = require('../lib/auth');
 
 async function authRoutes(app) {
   // POST /instructor/login
-  app.post('/instructor/login', async (req, reply) => {
+  app.post('/instructor/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { pin } = req.body || {};
     if (!pin) return reply.code(400).send({ error: 'pin is required' });
 
@@ -30,7 +30,7 @@ async function authRoutes(app) {
   });
 
   // POST /join
-  app.post('/join', async (req, reply) => {
+  app.post('/join', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { session_pin, username } = req.body || {};
     if (!session_pin || !username) {
       return reply.code(400).send({ error: 'session_pin and username are required' });

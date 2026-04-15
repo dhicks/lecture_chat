@@ -23,13 +23,13 @@ Not currently manifesting on `view_updating` branch after porting the clean-clos
 
 ## Phase 7 — Hardening
 
-- [ ] Rate limiting via `@fastify/rate-limit` (per IP, per route)
+- [x] Rate limiting via `@fastify/rate-limit` (per IP, per route)
 - [x] SSE reconnect logic on client (retry with exponential backoff)
 - [x] Validate all inputs (message length cap, poll option count, etc.)
 - [x] Ensure `DB_PATH` directory exists on startup; log a clear error if volume isn't persistent
 
 ### Verify Phase 7
-- [ ] Rapid-fire 20 `POST /message` requests → rate limiter returns 429 after threshold
+- [x] Rapid-fire `POST /message` requests → rate limiter returns 429 after 12/min (1 per 5s)
 - [x] Message body exceeding length cap → 400 with descriptive error (`test/hardening.test.js`)
 - [x] Poll with 5 options → 400; poll with 1 option → 400 (`test/hardening.test.js`)
 - [x] Kill the server mid-SSE-stream, restart it → client reconnects automatically (`test/sse.test.js`)

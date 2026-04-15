@@ -15,7 +15,7 @@ async function streamRoutes(app) {
     }
   }
 
-  app.get('/stream', { preHandler: requireStudentOrInstructor }, (req, reply) => {
+  app.get('/stream', { preHandler: requireStudentOrInstructor, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, (req, reply) => {
     const { role } = req.user;
 
     let session_id;

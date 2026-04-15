@@ -114,7 +114,7 @@ async function messageRoutes(app) {
   });
 
   // POST /message — post a new message or reply
-  app.post('/message', { preHandler: requireStudent }, (req, reply) => {
+  app.post('/message', { preHandler: requireStudent, config: { rateLimit: { max: 12, timeWindow: '1 minute' } } }, (req, reply) => {
     const { session_id, username } = req.user;
     const { body, parent_id } = req.body || {};
     const db = app.db;

@@ -5,7 +5,7 @@ const { broadcast, broadcastToInstructors } = require('../lib/sse');
 
 async function pollRoutes(app) {
   // POST /poll — instructor creates a poll
-  app.post('/poll', { preHandler: requireInstructor }, (req, reply) => {
+  app.post('/poll', { preHandler: requireInstructor, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, (req, reply) => {
     const { prompt, options } = req.body || {};
     const db = app.db;
 
@@ -34,7 +34,7 @@ async function pollRoutes(app) {
   });
 
   // POST /poll/:id/close — instructor closes a poll and broadcasts results
-  app.post('/poll/:id/close', { preHandler: requireInstructor }, (req, reply) => {
+  app.post('/poll/:id/close', { preHandler: requireInstructor, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, (req, reply) => {
     const pollId = Number(req.params.id);
     const db = app.db;
 
@@ -60,7 +60,7 @@ async function pollRoutes(app) {
   });
 
   // POST /vote — student submits a vote
-  app.post('/vote', { preHandler: requireStudent }, (req, reply) => {
+  app.post('/vote', { preHandler: requireStudent, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, (req, reply) => {
     const { session_id, username } = req.user;
     const { poll_id, choice } = req.body || {};
     const db = app.db;

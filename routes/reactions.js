@@ -7,7 +7,7 @@ const VALID_EMOJIS = new Set(['👍', '👎', '❓', '😂', '🔥', '✅', '❌
 
 async function reactionRoutes(app) {
   // POST /react — toggle an emoji reaction on a message
-  app.post('/react', { preHandler: requireStudent }, (req, reply) => {
+  app.post('/react', { preHandler: requireStudent, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, (req, reply) => {
     const { session_id, username } = req.user;
     const { message_id, emoji } = req.body || {};
     const db = app.db;
