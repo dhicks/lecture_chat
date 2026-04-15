@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/sse.test.js test/integration.test.js"
+    "test": "node --test test/sse.test.js test/integration.test.js test/hardening.test.js"
   },
   "keywords": [],
   "author": "",

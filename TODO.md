@@ -24,16 +24,16 @@ Not currently manifesting on `view_updating` branch after porting the clean-clos
 ## Phase 7 — Hardening
 
 - [ ] Rate limiting via `@fastify/rate-limit` (per IP, per route)
-- [ ] SSE reconnect logic on client (retry with exponential backoff)
-- [ ] Validate all inputs (message length cap, poll option count, etc.)
-- [ ] Ensure `DB_PATH` directory exists on startup; log a clear error if volume isn't persistent
+- [x] SSE reconnect logic on client (retry with exponential backoff)
+- [x] Validate all inputs (message length cap, poll option count, etc.)
+- [x] Ensure `DB_PATH` directory exists on startup; log a clear error if volume isn't persistent
 
 ### Verify Phase 7
 - [ ] Rapid-fire 20 `POST /message` requests → rate limiter returns 429 after threshold
-- [ ] Message body exceeding length cap → 400 with descriptive error
-- [ ] Poll with 5 options → 400; poll with 1 option → 400
-- [ ] Kill the server mid-SSE-stream, restart it → client reconnects automatically (observe in browser Network tab)
-- [ ] Start server with `DB_PATH` pointing to a non-existent directory → clear error logged, process exits
+- [x] Message body exceeding length cap → 400 with descriptive error (`test/hardening.test.js`)
+- [x] Poll with 5 options → 400; poll with 1 option → 400 (`test/hardening.test.js`)
+- [x] Kill the server mid-SSE-stream, restart it → client reconnects automatically (`test/sse.test.js`)
+- [x] Start server with `DB_PATH` pointing to a non-existent directory → clear error logged, process exits (`test/hardening.test.js`)
 
 ---
 
