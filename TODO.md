@@ -39,9 +39,9 @@ Not currently manifesting on `view_updating` branch after porting the clean-clos
 
 ## Phase 8 — Deployment
 
-- [ ] Write `railway.toml` or `render.yaml` config
-- [ ] Document persistent disk volume setup (mount at `/data`, set `DB_PATH=/data/chat.db`)
-- [ ] Add a `/healthz` route for uptime monitoring
+- [x] Write `railway.toml` or `render.yaml` config
+- [x] Document persistent disk volume setup (mount at `/data`, set `DB_PATH=/data/chat.db`)
+- [x] Add a `/healthz` route for uptime monitoring
 
 ### Verify Phase 8
 - [ ] Push to Railway/Render → deploy succeeds with no build errors
