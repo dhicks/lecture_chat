@@ -9,26 +9,13 @@ Not currently manifesting on `view_updating` branch after porting the clean-clos
 ---
 
 ## Phase 5 — Frontend (student)
-
-Complete.
-
 ### Verify Phase 5
 - [ ] **A11y**: run with a screen reader (VoiceOver on macOS) — new messages announced, reactions announced, poll announced, session-end announced
 
 ---
 
 ## Phase 6 — Frontend (instructor dashboard)
-
-- [x] **Two-column layout** (`public/instructor.html`, `public/instructor.js`): Move the message feed to the right column alongside the session/poll controls, rather than below them.
-- [x] **Previous poll results visible** (`public/instructor.js`): After a poll is closed, its results should remain visible in the instructor dashboard (not disappear). Keep a `closedPolls` list and render it below the active poll card.
-- [x] **Export old sessions** (`routes/session.js`, `public/instructor.js`): Add a `GET /sessions` endpoint listing recent sessions. In the dashboard, show a list of past sessions each with a download button that triggers the existing export endpoint.
-- [x] Ability to collapse replies in instructor message feed
-
-
-
 ### Verify Phase 6
-- [x] **A11y**: navigate the full instructor flow using only a keyboard — no mouse required
-- [x] **A11y**: "End Session" confirmation dialog traps focus; Escape dismisses and returns focus to the button
 - [ ] **A11y**: poll results bar chart is interpretable without sight (check via screen reader or axe)
 - [ ] **A11y**: message panel is interpretable without sight (check via screen reader or axe)
 
