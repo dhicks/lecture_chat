@@ -1,20 +1,9 @@
 'use strict';
 
+const { requireStudentOrInstructor } = require('../lib/auth');
 const { addClient, removeClient } = require('../lib/sse');
 
 async function streamRoutes(app) {
-  // Accept both student and instructor JWTs
-  async function requireStudentOrInstructor(req, reply) {
-    try {
-      await req.jwtVerify();
-    } catch {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-    if (req.user.role !== 'student' && req.user.role !== 'instructor') {
-      return reply.code(403).send({ error: 'Forbidden' });
-    }
-  }
-
   app.get('/stream', { preHandler: requireStudentOrInstructor, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, (req, reply) => {
     const { role } = req.user;
 
@@ -25,7 +14,6 @@ async function streamRoutes(app) {
         .get();
       if (!session) return reply.code(404).send({ error: 'No active session' });
       session_id = session.id;
-      reply._isInstructor = true;
     } else {
       session_id = req.user.session_id;
     }
@@ -38,7 +26,7 @@ async function streamRoutes(app) {
     });
     reply.raw.write(': connected\n\n');
 
-    addClient(session_id, reply);
+    addClient(session_id, reply, role);
 
     const heartbeat = setInterval(() => {
       try { reply.raw.write(': heartbeat\n\n'); }

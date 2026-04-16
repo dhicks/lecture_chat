@@ -15,11 +15,10 @@ const { spawn } = require('node:child_process');
 const { unlink } = require('node:fs/promises');
 const path = require('node:path');
 
-const TEST_PORT = 3998;
-const BASE      = `http://127.0.0.1:${TEST_PORT}`;
-const TEST_DB   = '/tmp/lecture_chat_hardening_test.db';
+const TEST_DB = '/tmp/lecture_chat_hardening_test.db';
 
 let serverProcess;
+let BASE;
 let iToken;
 let sToken;
 
@@ -32,24 +31,30 @@ before(async () => {
       ...process.env,
       INSTRUCTOR_PIN: '123456',
       JWT_SECRET:     'test-hardening-secret-xyz',
-      PORT:           String(TEST_PORT),
+      PORT:           '0',  // OS picks a free port
       DB_PATH:        TEST_DB,
     },
     stdio: 'pipe',
   });
 
-  serverProcess.stdout.on('data', () => {});
+  // Capture actual port from Fastify's JSON log line, drain stderr
+  BASE = await new Promise((resolve, reject) => {
+    let buf = '';
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for server port')), 5000);
+    serverProcess.stdout.on('data', chunk => {
+      buf += chunk.toString();
+      for (const line of buf.split('\n')) {
+        try {
+          const obj = JSON.parse(line);
+          const match = typeof obj.msg === 'string' && obj.msg.match(/:(\d+)$/);
+          if (match) { clearTimeout(timeout); resolve(`http://127.0.0.1:${match[1]}`); }
+        } catch {}
+      }
+    });
+    serverProcess.on('exit', code => { clearTimeout(timeout); reject(new Error(`server exited with code ${code}`)); });
+  });
   serverProcess.stderr.on('data', () => {});
 
-  // Poll /healthz until ready (max 5s)
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${BASE}/healthz`);
-      if (res.ok) break;
-    } catch {}
-    await new Promise(r => setTimeout(r, 100));
-  }
   const healthRes = await fetch(`${BASE}/healthz`);
   assert.ok(healthRes.ok, 'server should be healthy before tests run');
 
@@ -139,6 +144,9 @@ test('POST /poll accepts 2-option poll with 201', async () => {
     options: ['Yes', 'No'],
   }, iToken);
   assert.equal(res.status, 201);
+  // Close so the next poll test can create a new one
+  const { poll } = await res.json();
+  await apiPost(`/poll/${poll.id}/close`, {}, iToken);
 });
 
 test('POST /poll accepts 4-option poll with 201', async () => {
@@ -181,7 +189,7 @@ test('server exits with code 1 and logs an error when DB_PATH directory does not
       ...process.env,
       INSTRUCTOR_PIN: '654321',
       JWT_SECRET:     'test-dbpath-secret-xyz',
-      PORT:           '3997',
+      PORT:           '0',
       DB_PATH:        '/tmp/nonexistent_dir_abc123xyz/chat.db',
     },
     stdio: 'pipe',

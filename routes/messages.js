@@ -1,20 +1,9 @@
 'use strict';
 
-const { requireStudent } = require('../lib/auth');
+const { requireStudent, requireStudentOrInstructor, sanitize } = require('../lib/auth');
 const { broadcast } = require('../lib/sse');
 
 async function messageRoutes(app) {
-  // Inline preHandler: accept student or instructor JWT
-  async function requireStudentOrInstructor(req, reply) {
-    try {
-      await req.jwtVerify();
-    } catch {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-    if (req.user.role !== 'student' && req.user.role !== 'instructor') {
-      return reply.code(403).send({ error: 'Forbidden' });
-    }
-  }
 
   // GET /messages — last 50 top-level messages with replies and reaction counts
   app.get('/messages', { preHandler: requireStudentOrInstructor }, (req, reply) => {
@@ -146,7 +135,7 @@ async function messageRoutes(app) {
 
     const result = db.prepare(
       'INSERT INTO messages (session_id, username, body, parent_id) VALUES (?, ?, ?, ?)'
-    ).run(session_id, username, body.trim(), resolvedParentId);
+    ).run(session_id, username, sanitize(body.trim()), resolvedParentId);
 
     const message = db.prepare(
       'SELECT id, session_id, username, body, parent_id, created_at FROM messages WHERE id = ?'

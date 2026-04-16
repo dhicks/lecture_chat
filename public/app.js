@@ -1,5 +1,5 @@
 import { h, render } from 'https://esm.sh/preact@10';
-import { useState, useEffect, useRef, useCallback } from 'https://esm.sh/preact@10/hooks';
+import { useState, useEffect, useRef } from 'https://esm.sh/preact@10/hooks';
 import htm from 'https://esm.sh/htm@3';
 const html = htm.bind(h);
 
@@ -36,97 +36,9 @@ function clearSession() {
   localStorage.removeItem('lc_pin');
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
+// ── Shared utilities ──────────────────────────────────────────────────────────
 
-async function apiFetch(path, { token, method = 'GET', body } = {}) {
-  const headers = {};
-  if (body != null) headers['Content-Type'] = 'application/json';
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status });
-  return data;
-}
-
-// ── Fetch-based SSE client ────────────────────────────────────────────────────
-// Native EventSource doesn't support Authorization header, so we use fetch +
-// ReadableStream and parse the SSE protocol manually.
-
-function createSseClient(token, onEvent) {
-  let abortCtrl = null;
-  let retryDelay = 250;
-  let stopped = false;
-
-  async function connect() {
-    if (stopped) return;
-    abortCtrl = new AbortController();
-    console.log('[SSE:student] connecting…');
-    try {
-      const res = await fetch('/stream', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        signal: abortCtrl.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`SSE status ${res.status}`);
-      console.log('[SSE:student] connected');
-      retryDelay = 250; // reset on successful connect
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        // SSE events are separated by double newlines
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop(); // keep incomplete trailing chunk
-        for (const part of parts) {
-          let data = '';
-          for (const line of part.split('\n')) {
-            if (line.startsWith('data: ')) data += line.slice(6);
-          }
-          if (data) {
-            try {
-              const evt = JSON.parse(data);
-              console.log('[SSE:student] event:', evt);
-              onEvent(evt);
-            } catch (_) {}
-          }
-        }
-      }
-      // Server closed connection cleanly (done:true) — reconnect with backoff
-      if (!stopped) {
-        console.log(`[SSE:student] clean close, reconnecting in ${retryDelay}ms`);
-        await new Promise(r => setTimeout(r, retryDelay));
-        retryDelay = Math.min(retryDelay * 2, 30000);
-        connect();
-      }
-    } catch (err) {
-      if (err.name === 'AbortError' || stopped) return;
-      console.log(`[SSE:student] error, reconnecting in ${retryDelay}ms:`, err);
-      // Reconnect with exponential backoff (cap at 30s)
-      await new Promise(r => setTimeout(r, retryDelay));
-      retryDelay = Math.min(retryDelay * 2, 30000);
-      connect();
-    }
-  }
-
-  connect();
-  return { stop() { stopped = true; abortCtrl?.abort(); } };
-}
-
-// ── Time formatting ───────────────────────────────────────────────────────────
-
-function formatTime(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return '';
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+import { apiFetch, createSseClient, formatTime } from './lib.js';
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -650,7 +562,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
 
   // ── SSE event handler ───────────────────────────────────────────────────────
 
-  const handleSseEvent = useCallback((event) => {
+  function handleSseEvent(event) {
     switch (event.type) {
       case 'message_new':
         addMessage(event.message);
@@ -673,7 +585,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         sseRef.current?.stop();
         break;
     }
-  }, []);
+  }
 
   // ── Load messages ───────────────────────────────────────────────────────────
 
@@ -706,7 +618,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
 
   function connectSse() {
     sseRef.current?.stop();
-    sseRef.current = createSseClient(token, handleSseEvent);
+    sseRef.current = createSseClient(token, handleSseEvent, 'student');
   }
 
   // ── On mount ────────────────────────────────────────────────────────────────

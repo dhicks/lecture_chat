@@ -1,7 +1,7 @@
 {
     "name": "lecture_chat",
     "version": "1.0.0",
-    "description": "",
+    "description": "Real-time lecture chat system for large university classes",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",

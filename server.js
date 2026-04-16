@@ -75,3 +75,7 @@ app.listen({ port: Number(PORT), host: '0.0.0.0' }, (err) => {
     process.exit(1);
   }
 });
+
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => app.close().then(() => process.exit(0)));
+}

@@ -18,15 +18,14 @@ const { spawn }  = require('node:child_process');
 const { unlink } = require('node:fs/promises');
 const path = require('node:path');
 
-const TEST_PORT = 3999;
-const BASE      = `http://127.0.0.1:${TEST_PORT}`;
-const TEST_DB   = '/tmp/lecture_chat_integration_test.db';
+const TEST_DB = '/tmp/lecture_chat_integration_test.db';
 
 // ── Server fixture + shared session setup ─────────────────────────────────────
 // NOTE: multiple top-level before() hooks in node:test run concurrently.
 // Keep server spawn and session setup in a single before() to ensure ordering.
 
 let serverProcess;
+let BASE;
 
 before(async () => {
   serverProcess = spawn('node', ['server.js'], {
@@ -35,26 +34,31 @@ before(async () => {
       ...process.env,
       INSTRUCTOR_PIN: '123456',
       JWT_SECRET:     'test-integration-secret-xyz',
-      PORT:           String(TEST_PORT),
+      PORT:           '0',  // OS picks a free port
       DB_PATH:        TEST_DB,
     },
     stdio: 'pipe',
   });
 
-  // Drain stdout/stderr so the child process doesn't block on full pipe buffers
-  serverProcess.stdout.on('data', () => {});
+  // Capture actual port from Fastify's JSON log line, drain stderr
+  BASE = await new Promise((resolve, reject) => {
+    let buf = '';
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for server port')), 5000);
+    serverProcess.stdout.on('data', chunk => {
+      buf += chunk.toString();
+      for (const line of buf.split('\n')) {
+        try {
+          const obj = JSON.parse(line);
+          const match = typeof obj.msg === 'string' && obj.msg.match(/:(\d+)$/);
+          if (match) { clearTimeout(timeout); resolve(`http://127.0.0.1:${match[1]}`); }
+        } catch {}
+      }
+    });
+    serverProcess.on('exit', code => { clearTimeout(timeout); reject(new Error(`server exited with code ${code}`)); });
+  });
   serverProcess.stderr.on('data', () => {});
 
-  // Poll /healthz until the server is ready (max 5s)
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${BASE}/healthz`);
-      if (res.ok) break;
-    } catch {}
-    await new Promise(r => setTimeout(r, 100));
-  }
-  // Final check — throws if server never came up
+  // Final health check
   const res = await fetch(`${BASE}/healthz`);
   assert.ok(res.ok, 'server should be healthy before tests run');
 
@@ -230,6 +234,9 @@ test('B: student receives poll_new when instructor creates a poll', async () => 
     assert.equal(event.poll.id, poll.id);
     assert.equal(event.poll.prompt, prompt);
     assert.ok(!('results' in event.poll), 'poll_new should not include results');
+
+    // Close the poll so subsequent tests can create new polls
+    await apiPost(`/poll/${poll.id}/close`, {}, iToken);
   } finally {
     stop();
   }
@@ -271,6 +278,42 @@ test('C: student receives poll_closed with results after instructor closes poll'
   } finally {
     stop();
   }
+});
+
+// ── Test E: Duplicate username on /join returns 409 ──────────────────────────
+
+test('E: duplicate username in same session returns 409', async () => {
+  // First join succeeds
+  const res1 = await apiPost('/join', { session_pin: sessionPin, username: 'dup-user' });
+  assert.equal(res1.status, 200, 'first join should succeed');
+
+  // Second join with same username in same session should be rejected
+  const res2 = await apiPost('/join', { session_pin: sessionPin, username: 'dup-user' });
+  assert.equal(res2.status, 409, 'duplicate username should return 409');
+  const body = await res2.json();
+  assert.ok(body.error, 'response should include an error message');
+});
+
+// ── Test F: Reply to a reply is rejected ─────────────────────────────────────
+
+test('F: posting a reply to a reply returns 400', async () => {
+  const sToken = await joinSession(sessionPin, 'alice-f');
+
+  // Post a top-level message
+  const postRes = await apiPost('/message', { body: 'top-level' }, sToken);
+  assert.equal(postRes.status, 201, 'top-level message should succeed');
+  const { message: topMsg } = await postRes.json();
+
+  // Post a reply to the top-level message
+  const replyRes = await apiPost('/message', { body: 'reply', parent_id: topMsg.id }, sToken);
+  assert.equal(replyRes.status, 201, 'first reply should succeed');
+  const { message: replyMsg } = await replyRes.json();
+
+  // Attempt to reply to the reply — must be rejected
+  const nestedRes = await apiPost('/message', { body: 'nested', parent_id: replyMsg.id }, sToken);
+  assert.equal(nestedRes.status, 400, 'nested reply should return 400');
+  const body = await nestedRes.json();
+  assert.ok(body.error?.includes('nested'), `error should mention nesting (got: "${body.error}")`);
 });
 
 // ── Test D: Student receives session_ended (separate session) ─────────────────

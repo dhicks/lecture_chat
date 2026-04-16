@@ -31,101 +31,9 @@ function clearInstructorSession() {
   localStorage.removeItem('lc_instructor_session');
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
+// ── Shared utilities ──────────────────────────────────────────────────────────
 
-async function apiFetch(path, { token, method = 'GET', body } = {}) {
-  const headers = {};
-  if (body != null) headers['Content-Type'] = 'application/json';
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status });
-  return data;
-}
-
-// ── Fetch-based SSE client ────────────────────────────────────────────────────
-// Mirrors app.js exactly (no build step to share modules).
-
-function createSseClient(token, onEvent) {
-  let abortCtrl = null;
-  let retryDelay = 250;
-  let stopped = false;
-
-  async function connect() {
-    if (stopped) return;
-    abortCtrl = new AbortController();
-    console.log('[SSE:instructor] connecting…');
-    try {
-      const res = await fetch('/stream', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        signal: abortCtrl.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`SSE status ${res.status}`);
-      console.log('[SSE:instructor] connected');
-      retryDelay = 250;
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop();
-        for (const part of parts) {
-          let data = '';
-          for (const line of part.split('\n')) {
-            if (line.startsWith('data: ')) data += line.slice(6);
-          }
-          if (data) {
-            try {
-              const evt = JSON.parse(data);
-              console.log('[SSE:instructor] event:', evt);
-              onEvent(evt);
-            } catch (_) {}
-          }
-        }
-      }
-      // Server closed connection cleanly (done:true) — reconnect with backoff
-      if (!stopped) {
-        console.log(`[SSE:instructor] clean close, reconnecting in ${retryDelay}ms`);
-        await new Promise(r => setTimeout(r, retryDelay));
-        retryDelay = Math.min(retryDelay * 2, 30000);
-        connect();
-      }
-    } catch (err) {
-      if (err.name === 'AbortError' || stopped) return;
-      console.log(`[SSE:instructor] error, reconnecting in ${retryDelay}ms:`, err);
-      await new Promise(r => setTimeout(r, retryDelay));
-      retryDelay = Math.min(retryDelay * 2, 30000);
-      connect();
-    }
-  }
-
-  connect();
-  return { stop() { stopped = true; abortCtrl?.abort(); } };
-}
-
-// ── Time formatting ───────────────────────────────────────────────────────────
-
-function formatTime(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return '';
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatDateTime(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return '';
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+import { apiFetch, createSseClient, formatTime, formatDateTime } from './lib.js';
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -638,6 +546,22 @@ function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, o
   `;
 }
 
+// ReactionSummary — read-only reaction counts for the instructor feed ──────────
+
+function ReactionSummary({ reactions }) {
+  const entries = Object.entries(reactions || {}).filter(([, count]) => count > 0);
+  if (entries.length === 0) return null;
+  return html`
+    <div class="reaction-summary" aria-label="Reactions">
+      ${entries.map(([emoji, count]) => html`
+        <span class="reaction-chip" key=${emoji} aria-label="${emoji} ${count}">
+          ${emoji} ${count}
+        </span>
+      `)}
+    </div>
+  `;
+}
+
 // MessageFeed ─────────────────────────────────────────────────────────────────
 
 function MessageFeed({ messages }) {
@@ -685,6 +609,7 @@ function MessageFeed({ messages }) {
                   </time>
                 </div>
                 <p class="feed-body">${msg.body}</p>
+                <${ReactionSummary} reactions=${msg.reactions} />
                 ${replyCount > 0 && html`
                   <button
                     class="btn-replies-toggle"
@@ -705,6 +630,7 @@ function MessageFeed({ messages }) {
                           </time>
                         </div>
                         <p class="feed-body">${r.body}</p>
+                        <${ReactionSummary} reactions=${r.reactions} />
                       </div>
                     `)}
                   </div>
@@ -984,7 +910,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
     })();
 
     sseRef.current?.stop();
-    sseRef.current = createSseClient(token, handleSseEvent);
+    sseRef.current = createSseClient(token, handleSseEvent, 'instructor');
 
     return () => sseRef.current?.stop();
   }, [session?.id]);

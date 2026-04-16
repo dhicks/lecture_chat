@@ -78,6 +78,10 @@
       gap: 1.25rem;
       align-items: start;
     }
+    @media (max-width: 600px) {
+      .dash-main { grid-template-columns: 1fr; }
+      .dash-right { position: static; }
+    }
     .dash-left { display: flex; flex-direction: column; gap: 1.25rem; }
     .dash-right { position: sticky; top: 4.5rem; }
 
@@ -165,6 +169,19 @@
     .feed-time { font-size: 0.78rem; color: var(--muted); }
     .feed-body { word-break: break-word; white-space: pre-wrap; font-size: 0.95rem; }
     .feed-empty { font-size: 0.9rem; color: var(--muted); text-align: center; padding: 1rem 0; }
+
+    /* ── Reaction summary (instructor read-only) ── */
+    .reaction-summary { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+    .reaction-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 99px;
+      background: #e0e7ff;
+      font-size: 0.82rem;
+      color: var(--text);
+    }
 
     .btn-replies-toggle {
       background: none;

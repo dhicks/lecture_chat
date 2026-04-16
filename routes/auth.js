@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashPin, checkPin } = require('../lib/auth');
+const { hashPin, checkPin, sanitize } = require('../lib/auth');
 
 async function authRoutes(app) {
   // POST /instructor/login
@@ -31,10 +31,14 @@ async function authRoutes(app) {
 
   // POST /join
   app.post('/join', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const { session_pin, username } = req.body || {};
-    if (!session_pin || !username) {
+    const { session_pin, username: rawUsername } = req.body || {};
+    if (!session_pin || !rawUsername) {
       return reply.code(400).send({ error: 'session_pin and username are required' });
     }
+
+    const username = sanitize(rawUsername.trim());
+    if (!username) return reply.code(400).send({ error: 'username is required' });
+    if (username.length > 64) return reply.code(400).send({ error: 'username must be 64 characters or fewer' });
 
     const db = app.db;
     const session = db

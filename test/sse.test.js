@@ -26,13 +26,11 @@ test('broadcastToInstructors removes a client whose write throws', () => {
 
   const goodWrites = [];
   const goodReply = {
-    _isInstructor: true,
     raw: { write(data) { goodWrites.push(data); } },
   };
 
   let badWriteCount = 0;
   const badReply = {
-    _isInstructor: true,
     raw: {
       write() {
         badWriteCount++;
@@ -41,8 +39,8 @@ test('broadcastToInstructors removes a client whose write throws', () => {
     },
   };
 
-  addClient(sessionId, goodReply);
-  addClient(sessionId, badReply);
+  addClient(sessionId, goodReply, 'instructor');
+  addClient(sessionId, badReply, 'instructor');
 
   // First broadcast: badReply throws, should be removed from registry
   broadcastToInstructors({ type: 'first' });
