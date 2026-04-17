@@ -209,7 +209,7 @@ Reactions are toggled: posting the same emoji twice removes it. Counts are aggre
 ```
 INSTRUCTOR_PIN=123456      # 6-digit instructor PIN (required on first run)
 JWT_SECRET=<random string> # Secret for signing JWTs
-PORT=3000
+PORT=80
 DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persistent volume
 ```
 
