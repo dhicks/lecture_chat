@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BASE="http://localhost:3000"
+BASE="http://localhost"
 SSE_LOG="/tmp/lecture_chat_sse.log"
 BODY="/tmp/lecture_chat_body.json"
 TEST_DB="/tmp/lecture_chat_test.db"

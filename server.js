@@ -11,7 +11,7 @@ const { migrate } = require('./db/migrate');
 const {
   INSTRUCTOR_PIN,
   JWT_SECRET,
-  PORT = 3000,
+  PORT = 80,
   DB_PATH = './data/chat.db',
 } = process.env;
 

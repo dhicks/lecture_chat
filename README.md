@@ -30,9 +30,9 @@ git clone <repo-url>
 cd lecture_chat
 npm install
 cp .env.example .env        # then edit .env
-npm start                   # server runs on http://localhost:3000
+npm start                   # server runs on http://localhost
 ```
 
-Open `http://localhost:3000/instructor.html` in one tab (instructor dashboard) and `http://localhost:3000` in another (student view).
+Open `http://localhost/instructor.html` in one tab (instructor dashboard) and `http://localhost` in another (student view).
 
 See [docs/instructor-guide.md](docs/instructor-guide.md) for full setup, session workflow, deployment, and environment variable reference.
