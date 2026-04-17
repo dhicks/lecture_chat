@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashPin, checkPin, sanitize } = require('../lib/auth');
+const { hashPin, checkPin } = require('../lib/auth');
 
 async function authRoutes(app) {
   // POST /instructor/login
@@ -36,7 +36,7 @@ async function authRoutes(app) {
       return reply.code(400).send({ error: 'session_pin and username are required' });
     }
 
-    const username = sanitize(rawUsername.trim());
+    const username = rawUsername.trim();
     if (!username) return reply.code(400).send({ error: 'username is required' });
     if (username.length > 64) return reply.code(400).send({ error: 'username must be 64 characters or fewer' });
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { requireInstructor, requireStudent, sanitize } = require('../lib/auth');
+const { requireInstructor, requireStudent } = require('../lib/auth');
 const { broadcast, broadcastToInstructors } = require('../lib/sse');
 
 async function pollRoutes(app) {
@@ -26,14 +26,11 @@ async function pollRoutes(app) {
     const openPoll = db.prepare('SELECT id FROM polls WHERE session_id = ? AND closed_at IS NULL').get(session.id);
     if (openPoll) return reply.code(409).send({ error: 'A poll is already open' });
 
-    const sanitizedPrompt  = sanitize(prompt.trim());
-    const sanitizedOptions = cleanOptions.map(o => sanitize(o));
-
     const result = db.prepare(
       'INSERT INTO polls (session_id, prompt, options) VALUES (?, ?, ?)'
-    ).run(session.id, sanitizedPrompt, JSON.stringify(sanitizedOptions));
+    ).run(session.id, prompt.trim(), JSON.stringify(cleanOptions));
 
-    const poll = { id: result.lastInsertRowid, prompt: sanitizedPrompt, options: sanitizedOptions };
+    const poll = { id: result.lastInsertRowid, prompt: prompt.trim(), options: cleanOptions };
     broadcast(session.id, { type: 'poll_new', poll });
 
     return reply.code(201).send({ poll });
@@ -73,6 +70,9 @@ async function pollRoutes(app) {
 
     const session = db.prepare('SELECT ended_at FROM chat_sessions WHERE id = ?').get(session_id);
     if (!session || session.ended_at) return reply.code(403).send({ error: 'Session has ended' });
+
+    const member = db.prepare('SELECT id FROM session_users WHERE session_id = ? AND username = ?').get(session_id, username);
+    if (!member) return reply.code(403).send({ error: 'Session membership required' });
 
     if (poll_id == null || !Number.isInteger(Number(poll_id))) {
       return reply.code(400).send({ error: 'poll_id is required' });

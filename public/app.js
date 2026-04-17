@@ -289,6 +289,7 @@ function PollCard({ poll, results, voted, onVote }) {
   const [selected, setSelected]         = useState(null);
   const [submitting, setSubmitting]     = useState(false);
   const [dismissed, setDismissed]       = useState(false);
+  const [error, setError]               = useState('');
   // collapsed: true after voting — shows compact button instead of full form
   // initialized from voted prop to handle page-reload case
   const [collapsed, setCollapsed] = useState(!!voted);
@@ -297,11 +298,13 @@ function PollCard({ poll, results, voted, onVote }) {
     e.preventDefault();
     if (selected === null) return;
     setSubmitting(true);
+    setError('');
     try {
       await onVote(poll.id, selected);
       setCollapsed(true);
     } catch (err) {
       if (err.status === 409) setCollapsed(true);
+      else setError(err.message || 'Vote failed. The poll may have closed.');
     } finally {
       setSubmitting(false);
     }
@@ -390,6 +393,7 @@ function PollCard({ poll, results, voted, onVote }) {
               </label>
             `)}
           </div>
+          ${error && html`<p class="error" role="alert">${error}</p>`}
           <button
             class="btn btn-primary"
             type="submit"
@@ -539,10 +543,12 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   function addMessage(newMsg) {
     setMessages(prev => {
       if (newMsg.parent_id) {
-        // Add as a reply to its parent
+        // Add as a reply to its parent — deduplicate in case of SSE reconnect re-delivery
         return prev.map(m =>
           m.id === newMsg.parent_id
-            ? { ...m, replies: [...(m.replies || []), newMsg] }
+            ? { ...m, replies: (m.replies || []).some(r => r.id === newMsg.id)
+                  ? m.replies
+                  : [...(m.replies || []), newMsg] }
             : m
         );
       }
@@ -600,6 +606,15 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         ...m,
         replies: m.replies || [],
       }));
+      // Seed myReactions from per-user emoji data returned by the server
+      const initial = new Map();
+      for (const m of normalized) {
+        if (m.my_emojis?.length) initial.set(m.id, new Set(m.my_emojis));
+        for (const r of m.replies || []) {
+          if (r.my_emojis?.length) initial.set(r.id, new Set(r.my_emojis));
+        }
+      }
+      if (initial.size) setMyReactions(initial);
       // Merge with any SSE-delivered messages that arrived before this fetch resolved
       setMessages(prev => {
         const ids = new Set(normalized.map(m => m.id));

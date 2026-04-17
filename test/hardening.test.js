@@ -195,7 +195,48 @@ test('POST /react accepts a valid emoji with 200', async () => {
   assert.equal(res.status, 200);
 });
 
-// ── DB_PATH startup check ─────────────────────────────────────────────────────
+// ── GET /messages — my_emojis (#5) ───────────────────────────────────────────
+
+test('GET /messages returns my_emojis for the requesting student', async () => {
+  // Post a message and react to it
+  const msgRes = await apiPost('/message', { body: 'my-emojis test message' }, sToken);
+  assert.equal(msgRes.status, 201);
+  const { message } = await msgRes.json();
+
+  const reactRes = await apiPost('/react', { message_id: message.id, emoji: '👍' }, sToken);
+  assert.equal(reactRes.status, 200);
+
+  // Fetch messages as the same student — should see my_emojis with 👍
+  const headers = { Authorization: `Bearer ${sToken}` };
+  const getRes = await fetch(`${BASE}/messages`, { headers });
+  assert.equal(getRes.status, 200);
+  const data = await getRes.json();
+
+  const found = data.messages.find(m => m.id === message.id);
+  assert.ok(found, 'message should appear in GET /messages response');
+  assert.ok(Array.isArray(found.my_emojis), 'my_emojis should be an array');
+  assert.ok(found.my_emojis.includes('👍'), 'my_emojis should include 👍');
+});
+
+// ── Ghost posting after leave (#6) ────────────────────────────────────────────
+// This test must run last among sToken-using tests since it leaves the session.
+
+test('POST /message returns 403 after student has left the session', async () => {
+  // Leave the session using the shared student token
+  const leaveRes = await fetch(`${BASE}/session/leave`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${sToken}` },
+  });
+  assert.equal(leaveRes.status, 200, 'leave should succeed');
+
+  // Attempt to post with the now-stale token — should be rejected
+  const postRes = await apiPost('/message', { body: 'ghost message' }, sToken);
+  assert.equal(postRes.status, 403, 'ghost post should be rejected with 403');
+  const body = await postRes.json();
+  assert.ok(body.error, 'response should include an error field');
+});
+
+
 
 test('server exits with code 1 and logs an error when DB_PATH directory does not exist', async () => {
   const badProcess = spawn('node', ['server.js'], {

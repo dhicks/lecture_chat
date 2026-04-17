@@ -77,5 +77,5 @@ app.listen({ port: Number(PORT), host: '0.0.0.0' }, (err) => {
 });
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => app.close().then(() => process.exit(0)));
+  process.on(signal, () => app.close().then(() => { db.close(); process.exit(0); }));
 }

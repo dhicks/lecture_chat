@@ -1,6 +1,6 @@
 'use strict';
 
-const { requireStudent, requireStudentOrInstructor, sanitize } = require('../lib/auth');
+const { requireStudent, requireStudentOrInstructor } = require('../lib/auth');
 const { broadcast } = require('../lib/sse');
 
 async function messageRoutes(app) {
@@ -65,16 +65,36 @@ async function messageRoutes(app) {
       reactionsMap[row.message_id][row.emoji] = row.count;
     }
 
+    // Build per-user reactions map for students (instructors don't react)
+    const myReactionsMap = {};
+    if (req.user.role === 'student') {
+      const myRows = allIds.length
+        ? db.prepare(`
+            SELECT message_id, emoji FROM reactions
+            WHERE message_id IN (${allIds.map(() => '?').join(',')}) AND username = ?
+          `).all(...allIds, req.user.username)
+        : [];
+      for (const row of myRows) {
+        if (!myReactionsMap[row.message_id]) myReactionsMap[row.message_id] = [];
+        myReactionsMap[row.message_id].push(row.emoji);
+      }
+    }
+
     // Group replies by parent_id
     const repliesMap = {};
     for (const r of replies) {
       if (!repliesMap[r.parent_id]) repliesMap[r.parent_id] = [];
-      repliesMap[r.parent_id].push({ ...r, reactions: reactionsMap[r.id] || {} });
+      repliesMap[r.parent_id].push({
+        ...r,
+        reactions: reactionsMap[r.id] || {},
+        my_emojis: myReactionsMap[r.id] || [],
+      });
     }
 
     const messages = topLevel.map(m => ({
       ...m,
       reactions: reactionsMap[m.id] || {},
+      my_emojis: myReactionsMap[m.id] || [],
       replies: repliesMap[m.id] || [],
     }));
 
@@ -111,6 +131,9 @@ async function messageRoutes(app) {
     const session = db.prepare('SELECT ended_at FROM chat_sessions WHERE id = ?').get(session_id);
     if (!session || session.ended_at) return reply.code(403).send({ error: 'Session has ended' });
 
+    const member = db.prepare('SELECT id FROM session_users WHERE session_id = ? AND username = ?').get(session_id, username);
+    if (!member) return reply.code(403).send({ error: 'Session membership required' });
+
     if (!body || typeof body !== 'string' || body.trim().length === 0) {
       return reply.code(400).send({ error: 'body is required' });
     }
@@ -135,7 +158,7 @@ async function messageRoutes(app) {
 
     const result = db.prepare(
       'INSERT INTO messages (session_id, username, body, parent_id) VALUES (?, ?, ?, ?)'
-    ).run(session_id, username, sanitize(body.trim()), resolvedParentId);
+    ).run(session_id, username, body.trim(), resolvedParentId);
 
     const message = db.prepare(
       'SELECT id, session_id, username, body, parent_id, created_at FROM messages WHERE id = ?'

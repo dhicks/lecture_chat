@@ -22,6 +22,9 @@ async function reactionRoutes(app) {
     const session = db.prepare('SELECT ended_at FROM chat_sessions WHERE id = ?').get(session_id);
     if (!session || session.ended_at) return reply.code(403).send({ error: 'Session has ended' });
 
+    const member = db.prepare('SELECT id FROM session_users WHERE session_id = ? AND username = ?').get(session_id, username);
+    if (!member) return reply.code(403).send({ error: 'Session membership required' });
+
     const mid = Number(message_id);
     const message = db.prepare(
       'SELECT id, session_id FROM messages WHERE id = ?'
