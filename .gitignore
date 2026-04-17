@@ -3,3 +3,5 @@ data/
 .env
 curl_commands.sh
 review.md
+docs/instructor-guide.html
+docs/instructor-guide_files/
