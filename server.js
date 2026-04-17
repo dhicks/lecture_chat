@@ -24,18 +24,10 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-// Ensure data directory exists — on Railway the persistent volume may
-// not be mounted until shortly after the process starts, so retry once.
+// Ensure data directory exists — create it if missing so the app starts
+// successfully even when the Railway volume is mounted after process init.
 const dbDir = path.dirname(path.resolve(DB_PATH));
-if (!fs.existsSync(dbDir)) {
-  console.log(`Data directory ${dbDir} not found, waiting for volume mount...`);
-  const { execSync } = require('child_process');
-  execSync('sleep 3');
-  if (!fs.existsSync(dbDir)) {
-    console.error(`ERROR: DB directory does not exist: ${dbDir}`);
-    process.exit(1);
-  }
-}
+fs.mkdirSync(dbDir, { recursive: true });
 
 // Open DB and run migration
 const db = new Database(DB_PATH);
