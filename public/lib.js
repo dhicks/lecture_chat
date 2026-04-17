@@ -88,22 +88,24 @@ export function createSseClient(token, onEvent, label = 'client') {
 
 // ── Time formatting ───────────────────────────────────────────────────────────
 // SQLite stores timestamps as 'YYYY-MM-DD HH:MM:SS' with no timezone indicator.
-// Appending 'Z' ensures browsers parse it as UTC rather than local time.
+// parseSqliteTimestamp appends 'Z' so the browser treats the value as UTC when
+// constructing the Date object. Display methods (getHours, etc.) then return the
+// user's local wall-clock time, which is the correct behavior for a lecture tool.
 
-function toUtcDate(iso) {
+function parseSqliteTimestamp(iso) {
   if (!iso) return new Date(NaN);
   // If already has a timezone indicator, use as-is; otherwise append Z for UTC.
   return new Date(/[Z+\-]\d*$/.test(iso) ? iso : iso + 'Z');
 }
 
 export function formatTime(iso) {
-  const d = toUtcDate(iso);
+  const d = parseSqliteTimestamp(iso);
   if (isNaN(d)) return '';
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export function formatDateTime(iso) {
-  const d = toUtcDate(iso);
+  const d = parseSqliteTimestamp(iso);
   if (isNaN(d)) return '';
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;

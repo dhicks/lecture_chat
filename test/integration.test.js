@@ -316,6 +316,30 @@ test('F: posting a reply to a reply returns 400', async () => {
   assert.ok(body.error?.includes('nested'), `error should mention nesting (got: "${body.error}")`);
 });
 
+// ── Test G: Instructor receives vote_update when student votes ────────────────
+
+test('G: instructor receives vote_update when student votes', async () => {
+  const { queue: iQueue, stop: iStop } = await connectSse(iToken);
+  const sToken = await joinSession(sessionPin, 'alice-g');
+
+  try {
+    const pollRes = await apiPost('/poll', { prompt: `Vote update test ${Date.now()}`, options: ['X', 'Y'] }, iToken);
+    assert.equal(pollRes.status, 201, 'POST /poll should return 201');
+    const { poll } = await pollRes.json();
+
+    const voteRes = await apiPost('/vote', { poll_id: poll.id, choice: 0 }, sToken);
+    assert.equal(voteRes.status, 201, 'POST /vote should return 201');
+
+    const event = await iQueue.waitFor(e => e.type === 'vote_update' && e.poll_id === poll.id);
+    assert.equal(event.type, 'vote_update');
+    assert.ok(Array.isArray(event.tally), 'vote_update should include a tally array');
+
+    await apiPost(`/poll/${poll.id}/close`, {}, iToken);
+  } finally {
+    iStop();
+  }
+});
+
 // ── Test D: Student receives session_ended (separate session) ─────────────────
 
 test('D: student receives session_ended when instructor ends session', async () => {

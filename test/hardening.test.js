@@ -155,6 +155,21 @@ test('POST /poll accepts 4-option poll with 201', async () => {
     options: ['A', 'B', 'C', 'D'],
   }, iToken);
   assert.equal(res.status, 201);
+  const { poll } = await res.json();
+  await apiPost(`/poll/${poll.id}/close`, {}, iToken);
+});
+
+test('POST /poll returns 409 when a poll is already open', async () => {
+  const res1 = await apiPost('/poll', { prompt: `First poll ${Date.now()}`, options: ['Yes', 'No'] }, iToken);
+  assert.equal(res1.status, 201);
+  const { poll: openPoll } = await res1.json();
+
+  const res2 = await apiPost('/poll', { prompt: 'Second poll', options: ['A', 'B'] }, iToken);
+  assert.equal(res2.status, 409);
+  const body = await res2.json();
+  assert.ok(body.error, 'response should include an error field');
+
+  await apiPost(`/poll/${openPoll.id}/close`, {}, iToken);
 });
 
 // ── POST /react — emoji whitelist ─────────────────────────────────────────────

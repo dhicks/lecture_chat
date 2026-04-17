@@ -1,5 +1,5 @@
 import { h, render } from 'https://esm.sh/preact@10';
-import { useState, useEffect, useRef, useCallback } from 'https://esm.sh/preact@10/hooks';
+import { useState, useEffect, useRef } from 'https://esm.sh/preact@10/hooks';
 import htm from 'https://esm.sh/htm@3';
 const html = htm.bind(h);
 
@@ -848,7 +848,17 @@ function DashboardScreen({ token, initialSession, onLogout }) {
 
   // ── SSE event handler ───────────────────────────────────────────────────────
 
-  const handleSseEvent = useCallback((event) => {
+  function updateReactions(messageId, reactions) {
+    setMessages(prev => prev.map(m => {
+      if (m.id === messageId) return { ...m, reactions };
+      const updatedReplies = (m.replies || []).map(r =>
+        r.id === messageId ? { ...r, reactions } : r
+      );
+      return { ...m, replies: updatedReplies };
+    }));
+  }
+
+  function handleSseEvent(event) {
     switch (event.type) {
       case 'message_new':
         setMessages(prev => {
@@ -863,6 +873,9 @@ function DashboardScreen({ token, initialSession, onLogout }) {
           if (prev.some(m => m.id === msg.id)) return prev;
           return [...prev, { ...msg, replies: [] }];
         });
+        break;
+      case 'reaction_update':
+        updateReactions(event.message_id, event.reactions);
         break;
       case 'vote_update':
         setActivePoll(prev => {
@@ -887,12 +900,11 @@ function DashboardScreen({ token, initialSession, onLogout }) {
         sseRef.current?.stop();
         break;
     }
-  }, []);
+  }
 
   // ── Connect SSE and load messages on session change ─────────────────────────
 
   useEffect(() => {
-    console.log('[SSE:instructor] session effect running, session.id=', session?.id);
     if (!session) return;
 
     (async () => {

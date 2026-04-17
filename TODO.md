@@ -37,6 +37,12 @@ Not currently manifesting on `view_updating` branch after porting the clean-clos
 
 ---
 
+## Testing Notes
+
+- `test/regression.sh` is not wired into `npm test` — run it manually before deploy to exercise the full happy-path end-to-end flow.
+
+---
+
 ## Phase 8 — Deployment
 
 - [x] Write `railway.toml` or `render.yaml` config

@@ -1,6 +1,6 @@
 'use strict';
 
-const { requireInstructor, requireStudent } = require('../lib/auth');
+const { requireInstructor, requireStudent, sanitize } = require('../lib/auth');
 const { broadcast, broadcastToInstructors } = require('../lib/sse');
 
 async function pollRoutes(app) {
@@ -26,11 +26,14 @@ async function pollRoutes(app) {
     const openPoll = db.prepare('SELECT id FROM polls WHERE session_id = ? AND closed_at IS NULL').get(session.id);
     if (openPoll) return reply.code(409).send({ error: 'A poll is already open' });
 
+    const sanitizedPrompt  = sanitize(prompt.trim());
+    const sanitizedOptions = cleanOptions.map(o => sanitize(o));
+
     const result = db.prepare(
       'INSERT INTO polls (session_id, prompt, options) VALUES (?, ?, ?)'
-    ).run(session.id, prompt.trim(), JSON.stringify(cleanOptions));
+    ).run(session.id, sanitizedPrompt, JSON.stringify(sanitizedOptions));
 
-    const poll = { id: result.lastInsertRowid, prompt: prompt.trim(), options: cleanOptions };
+    const poll = { id: result.lastInsertRowid, prompt: sanitizedPrompt, options: sanitizedOptions };
     broadcast(session.id, { type: 'poll_new', poll });
 
     return reply.code(201).send({ poll });

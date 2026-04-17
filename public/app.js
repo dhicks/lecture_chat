@@ -120,12 +120,12 @@ function JoinScreen({ onJoined }) {
 
 // ReactionBar ─────────────────────────────────────────────────────────────────
 
-function ReactionBar({ messageId, reactions, myUsername, onReact, disabled }) {
+function ReactionBar({ messageId, reactions, myEmojis, onReact, disabled }) {
   return html`
     <div class="reaction-bar" role="group" aria-label="Reactions">
       ${EMOJIS.map(emoji => {
         const count = reactions[emoji] || 0;
-        const pressed = reactions['__mine_' + emoji] === true;
+        const pressed = myEmojis.has(emoji);
         const label = `${EMOJI_LABELS[emoji]}, ${count} reaction${count !== 1 ? 's' : ''}`;
         return html`
           <button
@@ -148,7 +148,7 @@ function ReactionBar({ messageId, reactions, myUsername, onReact, disabled }) {
 
 // MessageItem ─────────────────────────────────────────────────────────────────
 
-function MessageItem({ msg, isReply, username, onReact, onSendReply, sessionEnded }) {
+function MessageItem({ msg, isReply, username, myReactions, onReact, onSendReply, sessionEnded }) {
   const [replyOpen, setReplyOpen]   = useState(false);
   const [replyText, setReplyText]   = useState('');
   const [replySending, setReplySending] = useState(false);
@@ -188,7 +188,7 @@ function MessageItem({ msg, isReply, username, onReact, onSendReply, sessionEnde
       <${ReactionBar}
         messageId=${msg.id}
         reactions=${msg.reactions || {}}
-        myUsername=${username}
+        myEmojis=${myReactions.get(msg.id) ?? new Set()}
         onReact=${onReact}
         disabled=${sessionEnded}
       />
@@ -216,6 +216,7 @@ function MessageItem({ msg, isReply, username, onReact, onSendReply, sessionEnde
                   msg=${r}
                   isReply=${true}
                   username=${username}
+                  myReactions=${myReactions}
                   onReact=${onReact}
                   onSendReply=${onSendReply}
                   sessionEnded=${sessionEnded}
@@ -251,7 +252,7 @@ function MessageItem({ msg, isReply, username, onReact, onSendReply, sessionEnde
 
 // MessageFeed ─────────────────────────────────────────────────────────────────
 
-function MessageFeed({ messages, username, onReact, onSendReply, sessionEnded, feedRef, onScroll }) {
+function MessageFeed({ messages, username, myReactions, onReact, onSendReply, sessionEnded, feedRef, onScroll }) {
   return html`
     <section
       ref=${feedRef}
@@ -272,6 +273,7 @@ function MessageFeed({ messages, username, onReact, onSendReply, sessionEnded, f
           msg=${msg}
           isReply=${false}
           username=${username}
+          myReactions=${myReactions}
           onReact=${onReact}
           onSendReply=${onSendReply}
           sessionEnded=${sessionEnded}
@@ -499,6 +501,7 @@ function LogoutDialog({ onLogout, onCancel, triggerRef }) {
 
 function ChatScreen({ token, username, pin, onSessionEnd }) {
   const [messages, setMessages]         = useState([]);
+  const [myReactions, setMyReactions]   = useState(new Map());
   const [activePoll, setActivePoll]     = useState(null);
   const [votedPollId, setVotedPollId]   = useState(null);
   const [pollResults, setPollResults]   = useState(null);
@@ -649,7 +652,14 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
 
   async function handleReact(messageId, emoji) {
     await apiFetch('/react', { token, method: 'POST', body: { message_id: messageId, emoji } });
-    // SSE will deliver reaction_update
+    // Optimistically toggle local pressed state; SSE delivers updated counts
+    setMyReactions(prev => {
+      const next = new Map(prev);
+      const set  = new Set(next.get(messageId) || []);
+      if (set.has(emoji)) set.delete(emoji); else set.add(emoji);
+      next.set(messageId, set);
+      return next;
+    });
   }
 
   async function handleVote(pollId, choice) {
@@ -703,6 +713,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
       <${MessageFeed}
         messages=${messages}
         username=${username}
+        myReactions=${myReactions}
         onReact=${handleReact}
         onSendReply=${handleSendReply}
         sessionEnded=${sessionEnded}

@@ -220,7 +220,7 @@
     .field { display: flex; flex-direction: column; gap: 0.3rem; }
     label { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
 
-    input[type="text"], textarea {
+    input[type="text"], input[type="password"], textarea {
       width: 100%;
       padding: 0.65rem 0.9rem;
       font-size: 1rem;
@@ -231,7 +231,7 @@
       color: var(--text);
       transition: border-color 0.15s;
     }
-    input[type="text"]:focus, textarea:focus {
+    input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
