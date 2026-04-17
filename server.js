@@ -24,13 +24,6 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-// Ensure data directory exists
-const dbDir = path.dirname(path.resolve(DB_PATH));
-if (!fs.existsSync(dbDir)) {
-  console.error(`ERROR: DB directory does not exist: ${dbDir}`);
-  process.exit(1);
-}
-
 // Open DB and run migration
 const db = new Database(DB_PATH);
 migrate(db);
