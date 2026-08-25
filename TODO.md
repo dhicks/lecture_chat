@@ -6,6 +6,10 @@
 
 Not currently manifesting on `view_updating` branch after porting the clean-close reconnect fix to `public/instructor.js` and adding SSE diagnostics to both views. Not confirmed resolved — behavior was intermittent before. Full investigation notes and console diagnostic guide: [`docs/sse-bug.md`](docs/sse-bug.md).
 
+### **`POST /vote` returns 500 instead of a 4xx on two rejection paths**
+
+Found while running `test/regression.sh` during the instructor PIN fix; pre-existing on `main`, not a regression. Two checks fail: voting on a closed poll returns 500 where 400 is expected, and voting after the session ends returns 500 where 403 is expected. The other routes handle both cases correctly, so the guard is likely missing in [`routes/polls.js`](routes/polls.js) and an unhandled exception is surfacing instead.
+
 ---
 
 ## Phase 5 — Frontend (student)

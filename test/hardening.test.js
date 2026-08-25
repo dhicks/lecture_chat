@@ -238,6 +238,81 @@ test('POST /message returns 403 after student has left the session', async () =>
 
 
 
+// ── Instructor PIN comes from the environment, not the database ───────────────
+
+// Spawn a server on a caller-supplied DB path and PIN, and resolve its base URL.
+// Separate from the shared fixture above because this test needs two servers in
+// sequence against the same database file.
+async function spawnServer(instructorPin, dbPath) {
+  const proc = spawn('node', ['server.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: {
+      ...process.env,
+      INSTRUCTOR_PIN: instructorPin,
+      JWT_SECRET:     'test-pin-rotation-secret-xyz',
+      PORT:           '0',
+      DB_PATH:        dbPath,
+    },
+    stdio: 'pipe',
+  });
+
+  const base = await new Promise((resolve, reject) => {
+    let buf = '';
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for server port')), 5000);
+    proc.stdout.on('data', chunk => {
+      buf += chunk.toString();
+      for (const line of buf.split('\n')) {
+        try {
+          const obj = JSON.parse(line);
+          const match = typeof obj.msg === 'string' && obj.msg.match(/:(\d+)$/);
+          if (match) { clearTimeout(timeout); resolve(`http://127.0.0.1:${match[1]}`); }
+        } catch {}
+      }
+    });
+    proc.on('exit', code => { clearTimeout(timeout); reject(new Error(`server exited with code ${code}`)); });
+  });
+  proc.stderr.on('data', () => {});
+
+  return { proc, base };
+}
+
+function login(base, pin) {
+  return fetch(`${base}/instructor/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+}
+
+test('changing INSTRUCTOR_PIN changes the login PIN on an existing database', async () => {
+  const db = '/tmp/lecture_chat_pin_rotation_test.db';
+  await unlink(db).catch(() => {});
+
+  // First run: log in with the original PIN.
+  const first = await spawnServer('111111', db);
+  try {
+    const res = await login(first.base, '111111');
+    assert.equal(res.status, 200, 'original PIN should log in on first run');
+  } finally {
+    first.proc.kill();
+    await new Promise(resolve => first.proc.on('close', resolve));
+  }
+
+  // Second run: same database file, different INSTRUCTOR_PIN.
+  const second = await spawnServer('222222', db);
+  try {
+    const stale = await login(second.base, '111111');
+    assert.equal(stale.status, 401, 'old PIN should be rejected after the env var changes');
+
+    const current = await login(second.base, '222222');
+    assert.equal(current.status, 200, 'new PIN should log in after the env var changes');
+  } finally {
+    second.proc.kill();
+    await new Promise(resolve => second.proc.on('close', resolve));
+    await unlink(db).catch(() => {});
+  }
+});
+
 test('server exits with code 1 and logs an error when DB_PATH directory does not exist', async () => {
   const badProcess = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
