@@ -1,29 +1,33 @@
 'use strict';
 
-const { hashPin, checkPin } = require('../lib/auth');
+const crypto = require('crypto');
+
+// Constant-time string comparison. A plain `!==` returns as soon as two
+// characters differ, leaking the PIN's length and matching prefix through
+// response timing.
+function pinsMatch(submitted, expected) {
+  const a = Buffer.from(submitted);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;  // timingSafeEqual throws on length mismatch
+  return crypto.timingSafeEqual(a, b);
+}
 
 async function authRoutes(app) {
   // POST /instructor/login
+  // The PIN is read from the environment on every request, so changing
+  // INSTRUCTOR_PIN and restarting the server changes the PIN. It is never
+  // stored in the database.
   app.post('/instructor/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { pin } = req.body || {};
     if (!pin) return reply.code(400).send({ error: 'pin is required' });
 
-    const db = app.db;
-    let row = db.prepare('SELECT pin_hash FROM instructor WHERE id = 1').get();
-
-    // First run: bootstrap the instructor PIN from env
-    if (!row) {
-      const envPin = process.env.INSTRUCTOR_PIN;
-      if (!envPin) {
-        return reply.code(500).send({ error: 'INSTRUCTOR_PIN not configured' });
-      }
-      const pin_hash = await hashPin(envPin);
-      db.prepare('INSERT INTO instructor (id, pin_hash) VALUES (1, ?)').run(pin_hash);
-      row = { pin_hash };
+    // server.js exits at startup when this is unset; checked again here as defence in depth
+    const expectedPin = process.env.INSTRUCTOR_PIN;
+    if (!expectedPin) {
+      return reply.code(500).send({ error: 'INSTRUCTOR_PIN not configured' });
     }
 
-    const valid = await checkPin(pin, row.pin_hash);
-    if (!valid) return reply.code(401).send({ error: 'Invalid PIN' });
+    if (!pinsMatch(pin, expectedPin)) return reply.code(401).send({ error: 'Invalid PIN' });
 
     const token = app.jwt.sign({ role: 'instructor' }, { expiresIn: '8h' });
     return { token };

@@ -26,9 +26,11 @@ No Redis, no message broker, no separate DB server.
 
 ### Two roles, two PINs
 
-**Instructor PIN** (6 digits, set at first run via env var `INSTRUCTOR_PIN`)
+**Instructor PIN** (6 digits, set via env var `INSTRUCTOR_PIN`)
 - Logs into the instructor dashboard
-- Hashed with bcrypt and stored in DB on first use
+- Read from the environment on every login; never stored in the database
+- Change the env var and restart the server to change the PIN
+- Compared in constant time (`crypto.timingSafeEqual`) so response timing does not leak the PIN
 - Issues a signed JWT (`role: instructor`) on login
 
 **Session PIN** (4 digits, randomly generated per session)
@@ -49,12 +51,7 @@ No Redis, no message broker, no separate DB server.
 ## Database Schema
 
 ```sql
--- Instructor credential (single row)
-CREATE TABLE instructor (
-  id          INTEGER PRIMARY KEY,
-  pin_hash    TEXT NOT NULL,
-  created_at  TEXT DEFAULT (datetime('now'))
-);
+-- No instructor table: the instructor PIN lives in the INSTRUCTOR_PIN env var
 
 -- Chat sessions
 CREATE TABLE chat_sessions (
@@ -207,7 +204,7 @@ Reactions are toggled: posting the same emoji twice removes it. Counts are aggre
 ## Configuration (Environment Variables)
 
 ```
-INSTRUCTOR_PIN=123456      # 6-digit instructor PIN (required on first run)
+INSTRUCTOR_PIN=123456      # 6-digit instructor PIN (required; read on every login)
 JWT_SECRET=<random string> # Secret for signing JWTs
 PORT=80
 DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persistent volume

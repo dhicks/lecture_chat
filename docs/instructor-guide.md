@@ -140,6 +140,8 @@ In the Railway dashboard, add these variables to your service:
 | `DB_PATH` | `/data/chat.db` |
 | `PORT` | `80` |
 
+To change the instructor PIN later, edit `INSTRUCTOR_PIN` and redeploy. The server reads it on every login, so the new PIN takes effect as soon as the deploy goes live.
+
 ### Persistent storage
 
 The SQLite database must survive redeployments. In Railway:
@@ -170,7 +172,7 @@ A `200` response means the server is running.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `INSTRUCTOR_PIN` | Yes | -- | 6-digit PIN for instructor login. Set once; hashed and stored in the database on first use. |
+| `INSTRUCTOR_PIN` | Yes | -- | 6-digit PIN for instructor login. Read from the environment on every login. To change the PIN, edit this variable and redeploy. |
 | `JWT_SECRET` | Yes | -- | Secret key for signing authentication tokens. Use a long random string. |
 | `PORT` | No | `80` | Port the server listens on. |
 | `DB_PATH` | No | `./data/chat.db` | Path to the SQLite database file. On Railway, set to `/data/chat.db` with a mounted volume. |

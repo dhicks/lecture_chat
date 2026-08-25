@@ -1,11 +1,5 @@
 PRAGMA journal_mode=WAL;
 
-CREATE TABLE IF NOT EXISTS instructor (
-  id          INTEGER PRIMARY KEY,
-  pin_hash    TEXT NOT NULL,
-  created_at  TEXT DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_pin TEXT NOT NULL,

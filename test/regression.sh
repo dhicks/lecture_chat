@@ -72,7 +72,7 @@ STATUS=$(http GET "$BASE/healthz")
 check "healthz → 200" "200" "$STATUS"
 
 TABLES=$(sqlite3 "$TEST_DB" ".tables" 2>/dev/null | tr ' ' '\n' | sort | tr '\n' ' ' | xargs)
-for tbl in chat_sessions instructor messages poll_votes polls reactions session_users; do
+for tbl in chat_sessions messages poll_votes polls reactions session_users; do
   [[ "$TABLES" == *"$tbl"* ]] \
     && echo "PASS: table $tbl exists" \
     || { echo "FAIL: table $tbl missing"; FAILURES=$((FAILURES + 1)); }
