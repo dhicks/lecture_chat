@@ -120,11 +120,15 @@ function JoinScreen({ onJoined }) {
 
 // ReactionBar ─────────────────────────────────────────────────────────────────
 
-function ReactionBar({ messageId, reactions, myEmojis, onReact, disabled }) {
+// Shows only emoji with at least one reaction, plus an "Add reaction" button
+// that opens the full emoji list in a modal picker.
+function ReactionBar({ messageId, reactions, myEmojis, onReact, onOpenPicker, disabled }) {
+  const active = EMOJIS.filter(emoji => (reactions[emoji] || 0) > 0);
+
   return html`
     <div class="reaction-bar" role="group" aria-label="Reactions">
-      ${EMOJIS.map(emoji => {
-        const count = reactions[emoji] || 0;
+      ${active.map(emoji => {
+        const count = reactions[emoji];
         const pressed = myEmojis.has(emoji);
         const label = `${EMOJI_LABELS[emoji]}, ${count} reaction${count !== 1 ? 's' : ''}`;
         return html`
@@ -138,17 +142,27 @@ function ReactionBar({ messageId, reactions, myEmojis, onReact, disabled }) {
             onClick=${() => onReact(messageId, emoji)}
           >
             <span aria-hidden="true">${emoji}</span>
-            ${count > 0 && html`<span class="reaction-count" aria-hidden="true">${count}</span>`}
+            <span class="reaction-count" aria-hidden="true">${count}</span>
           </button>
         `;
       })}
+      <button
+        class="add-reaction-btn"
+        type="button"
+        aria-label="Add reaction"
+        aria-haspopup="dialog"
+        disabled=${disabled}
+        onClick=${e => onOpenPicker(messageId, e.currentTarget)}
+      >
+        <span aria-hidden="true">☺+</span>
+      </button>
     </div>
   `;
 }
 
 // MessageItem ─────────────────────────────────────────────────────────────────
 
-function MessageItem({ msg, isReply, username, myReactions, onReact, onSendReply, sessionEnded }) {
+function MessageItem({ msg, isReply, username, myReactions, onReact, onOpenPicker, onSendReply, sessionEnded }) {
   const [replyOpen, setReplyOpen]   = useState(false);
   const [replyText, setReplyText]   = useState('');
   const [replySending, setReplySending] = useState(false);
@@ -190,6 +204,7 @@ function MessageItem({ msg, isReply, username, myReactions, onReact, onSendReply
         reactions=${msg.reactions || {}}
         myEmojis=${myReactions.get(msg.id) ?? new Set()}
         onReact=${onReact}
+        onOpenPicker=${onOpenPicker}
         disabled=${sessionEnded}
       />
       ${!isReply && html`
@@ -218,6 +233,7 @@ function MessageItem({ msg, isReply, username, myReactions, onReact, onSendReply
                   username=${username}
                   myReactions=${myReactions}
                   onReact=${onReact}
+                  onOpenPicker=${onOpenPicker}
                   onSendReply=${onSendReply}
                   sessionEnded=${sessionEnded}
                 />
@@ -252,7 +268,7 @@ function MessageItem({ msg, isReply, username, myReactions, onReact, onSendReply
 
 // MessageFeed ─────────────────────────────────────────────────────────────────
 
-function MessageFeed({ messages, username, myReactions, onReact, onSendReply, sessionEnded, feedRef, onScroll }) {
+function MessageFeed({ messages, username, myReactions, onReact, onOpenPicker, onSendReply, sessionEnded, feedRef, onScroll }) {
   return html`
     <section
       ref=${feedRef}
@@ -275,6 +291,7 @@ function MessageFeed({ messages, username, myReactions, onReact, onSendReply, se
           username=${username}
           myReactions=${myReactions}
           onReact=${onReact}
+          onOpenPicker=${onOpenPicker}
           onSendReply=${onSendReply}
           sessionEnded=${sessionEnded}
         />
@@ -460,6 +477,62 @@ function MessageInput({ onSend, sessionEnded, inputRef }) {
   `;
 }
 
+// EmojiPickerDialog ───────────────────────────────────────────────────────────
+
+// Modal list of every emoji, opened from a message's "Add reaction" button.
+// Rendered once by ChatScreen; `messageId` names the message it acts on.
+function EmojiPickerDialog({ messageId, myEmojis, onPick, onClose, triggerEl }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    // Browser fires 'cancel' on Escape and closes the dialog automatically
+    function handleCancel() {
+      triggerEl?.focus();
+      onClose();
+    }
+    dialog.addEventListener('cancel', handleCancel);
+    return () => dialog.removeEventListener('cancel', handleCancel);
+  }, []);
+
+  function dismiss() {
+    dialogRef.current?.close();
+    triggerEl?.focus();
+    onClose();
+  }
+
+  function pick(emoji) {
+    dialogRef.current?.close();
+    triggerEl?.focus();
+    onPick(messageId, emoji);
+  }
+
+  return html`
+    <dialog ref=${dialogRef} class="emoji-picker-dialog" aria-labelledby="emoji-picker-title">
+      <h2 id="emoji-picker-title">Add a reaction</h2>
+      <div class="emoji-picker-grid" role="group" aria-labelledby="emoji-picker-title">
+        ${EMOJIS.map(emoji => html`
+          <button
+            key=${emoji}
+            class="emoji-picker-btn"
+            type="button"
+            aria-label=${EMOJI_LABELS[emoji]}
+            aria-pressed=${String(myEmojis.has(emoji))}
+            onClick=${() => pick(emoji)}
+          >
+            <span aria-hidden="true">${emoji}</span>
+          </button>
+        `)}
+      </div>
+      <div class="emoji-picker-actions">
+        <button class="btn btn-secondary" type="button" onClick=${dismiss}>Cancel</button>
+      </div>
+    </dialog>
+  `;
+}
+
 // LogoutDialog ────────────────────────────────────────────────────────────────
 
 function LogoutDialog({ onLogout, onCancel, triggerRef }) {
@@ -513,6 +586,8 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   const [loadError, setLoadError]       = useState('');
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  // Open emoji picker: { messageId, triggerEl } — triggerEl gets focus back on close
+  const [picker, setPicker] = useState(null);
 
   const feedRef      = useRef(null);
   const inputRef     = useRef(null);
@@ -677,6 +752,15 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
     });
   }
 
+  function handleOpenPicker(messageId, triggerEl) {
+    setPicker({ messageId, triggerEl });
+  }
+
+  async function handlePick(messageId, emoji) {
+    setPicker(null);
+    await handleReact(messageId, emoji);
+  }
+
   async function handleVote(pollId, choice) {
     await apiFetch('/vote', { token, method: 'POST', body: { poll_id: pollId, choice } });
     setVotedPollId(pollId);
@@ -719,6 +803,16 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         />
       `}
 
+      ${picker && html`
+        <${EmojiPickerDialog}
+          messageId=${picker.messageId}
+          myEmojis=${myReactions.get(picker.messageId) ?? new Set()}
+          onPick=${handlePick}
+          onClose=${() => setPicker(null)}
+          triggerEl=${picker.triggerEl}
+        />
+      `}
+
       ${loadError && html`
         <div class="alert alert-error" role="alert" aria-live="assertive" style="margin: 0.75rem;">
           ${loadError}
@@ -730,6 +824,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         username=${username}
         myReactions=${myReactions}
         onReact=${handleReact}
+        onOpenPicker=${handleOpenPicker}
         onSendReply=${handleSendReply}
         sessionEnded=${sessionEnded}
         feedRef=${feedRef}

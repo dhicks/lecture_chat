@@ -194,6 +194,70 @@
 
     .reaction-count { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
 
+    /* Opens the emoji picker; dashed border marks it as an affordance, not a count */
+    .add-reaction-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.15rem 0.45rem;
+      min-height: 32px;
+      min-width: 44px;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      border: 1.5px dashed var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--font);
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    .add-reaction-btn:hover:not(:disabled) {
+      background: #f0f4ff;
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .add-reaction-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Emoji picker dialog ── */
+    .emoji-picker-dialog {
+      /* The global `* { margin: 0 }` reset kills the UA stylesheet's
+         `dialog:modal { margin: auto }`, which is what centers the dialog. */
+      margin: auto;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      max-width: 320px;
+      width: calc(100% - 2rem);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .emoji-picker-dialog::backdrop { background: rgba(0,0,0,0.4); }
+    .emoji-picker-dialog h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem; }
+
+    .emoji-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+    .emoji-picker-btn {
+      min-height: 52px;
+      min-width: 44px;
+      font-size: 1.5rem;
+      line-height: 1;
+      border-radius: var(--radius);
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      font-family: var(--font);
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .emoji-picker-btn[aria-pressed="true"] {
+      background: #eff6ff;
+      border-color: var(--accent);
+    }
+    .emoji-picker-btn:hover { background: #f0f4ff; }
+
+    .emoji-picker-actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
+
     /* ── Reply thread ── */
     .reply-toggle-row { margin-top: 0.35rem; }
 
@@ -356,6 +420,7 @@
 
     /* ── Logout dialog ── */
     .logout-dialog {
+      margin: auto;   /* restore modal centering lost to the `* { margin: 0 }` reset */
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
       padding: 1.5rem;
