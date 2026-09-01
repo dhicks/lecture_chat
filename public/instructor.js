@@ -417,7 +417,7 @@ function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, o
   }
 
   function addOption() {
-    if (options.length < 4) setOptions(prev => [...prev, '']);
+    if (options.length < 12) setOptions(prev => [...prev, '']);
   }
 
   function removeOption(i) {
@@ -476,7 +476,7 @@ function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, o
 
           <fieldset style="border:none; padding:0;">
             <legend style="font-size:0.9rem; font-weight:600; color:var(--muted); margin-bottom:0.4rem;">
-              Options (2–4)
+              Options (2–12)
             </legend>
             ${options.map((opt, i) => html`
               <div key=${i} class="option-row" style="margin-bottom:0.4rem;">
@@ -501,7 +501,7 @@ function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, o
                 `}
               </div>
             `)}
-            ${options.length < 4 && html`
+            ${options.length < 12 && html`
               <button
                 class="btn btn-secondary btn-sm"
                 type="button"

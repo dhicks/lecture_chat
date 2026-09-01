@@ -118,10 +118,10 @@ test('POST /poll rejects 1-option poll with 400', async () => {
   assert.ok(json.error);
 });
 
-test('POST /poll rejects 5-option poll with 400', async () => {
+test('POST /poll rejects 13-option poll with 400', async () => {
   const res = await apiPost('/poll', {
     prompt: 'Too many?',
-    options: ['A', 'B', 'C', 'D', 'E'],
+    options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'],
   }, iToken);
   assert.equal(res.status, 400);
   const json = await res.json();
@@ -149,10 +149,10 @@ test('POST /poll accepts 2-option poll with 201', async () => {
   await apiPost(`/poll/${poll.id}/close`, {}, iToken);
 });
 
-test('POST /poll accepts 4-option poll with 201', async () => {
+test('POST /poll accepts 12-option poll with 201', async () => {
   const res = await apiPost('/poll', {
-    prompt: `Valid 4-option poll ${Date.now()}`,
-    options: ['A', 'B', 'C', 'D'],
+    prompt: `Valid 12-option poll ${Date.now()}`,
+    options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'],
   }, iToken);
   assert.equal(res.status, 201);
   const { poll } = await res.json();

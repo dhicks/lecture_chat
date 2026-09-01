@@ -12,8 +12,8 @@ async function pollRoutes(app) {
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       return reply.code(400).send({ error: 'prompt is required' });
     }
-    if (!Array.isArray(options) || options.length < 2 || options.length > 4) {
-      return reply.code(400).send({ error: 'options must be an array of 2–4 items' });
+    if (!Array.isArray(options) || options.length < 2 || options.length > 12) {
+      return reply.code(400).send({ error: 'options must be an array of 2–12 items' });
     }
     const cleanOptions = options.map(o => (typeof o === 'string' ? o.trim() : ''));
     if (cleanOptions.some(o => o.length === 0)) {

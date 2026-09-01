@@ -35,7 +35,7 @@ Found while running `test/regression.sh` during the instructor PIN fix; pre-exis
 ### Verify Phase 7
 - [x] Rapid-fire `POST /message` requests → rate limiter returns 429 after 12/min (1 per 5s)
 - [x] Message body exceeding length cap → 400 with descriptive error (`test/hardening.test.js`)
-- [x] Poll with 5 options → 400; poll with 1 option → 400 (`test/hardening.test.js`)
+- [x] Poll with 13 options → 400; poll with 1 option → 400 (`test/hardening.test.js`)
 - [x] Kill the server mid-SSE-stream, restart it → client reconnects automatically (`test/sse.test.js`)
 - [x] Start server with `DB_PATH` pointing to a non-existent directory → clear error logged, process exits (`test/hardening.test.js`)
 
