@@ -268,7 +268,7 @@ function MessageItem({ msg, isReply, username, myReactions, onReact, onOpenPicke
 
 // MessageFeed ─────────────────────────────────────────────────────────────────
 
-function MessageFeed({ messages, username, myReactions, onReact, onOpenPicker, onSendReply, sessionEnded, feedRef, onScroll }) {
+function MessageFeed({ messages, username, myReactions, onReact, onOpenPicker, onSendReply, sessionEnded, chatDisabled, feedRef, onScroll }) {
   return html`
     <section
       ref=${feedRef}
@@ -278,7 +278,7 @@ function MessageFeed({ messages, username, myReactions, onReact, onOpenPicker, o
       aria-relevant="additions"
       onScroll=${onScroll}
     >
-      ${messages.length === 0 && html`
+      ${messages.length === 0 && !chatDisabled && html`
         <p style="color: var(--muted); font-size: 0.9rem; text-align: center; margin-top: 2rem;">
           No messages yet. Be the first to say something!
         </p>
@@ -426,14 +426,15 @@ function PollCard({ poll, results, voted, onVote }) {
 
 // MessageInput ────────────────────────────────────────────────────────────────
 
-function MessageInput({ onSend, sessionEnded, inputRef }) {
+function MessageInput({ onSend, sessionEnded, chatDisabled, inputRef }) {
   const [text, setText]     = useState('');
   const [sending, setSending] = useState(false);
+  const blocked = sessionEnded || chatDisabled;
 
   async function handleSubmit(e) {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed || sending || sessionEnded) return;
+    if (!trimmed || sending || blocked) return;
     setSending(true);
     try {
       await onSend(trimmed);
@@ -451,6 +452,12 @@ function MessageInput({ onSend, sessionEnded, inputRef }) {
     }
   }
 
+  const placeholder = sessionEnded
+    ? 'Session has ended'
+    : chatDisabled
+      ? 'Chat is currently disabled'
+      : 'Type a message… (Enter to send)';
+
   return html`
     <div class="input-bar">
       <form class="input-bar-form" onSubmit=${handleSubmit}>
@@ -458,19 +465,19 @@ function MessageInput({ onSend, sessionEnded, inputRef }) {
           ref=${inputRef}
           id="message-input"
           rows="1"
-          placeholder=${sessionEnded ? 'Session has ended' : 'Type a message… (Enter to send)'}
+          placeholder=${placeholder}
           aria-label="Message"
           value=${text}
           onInput=${e => setText(e.target.value)}
           onKeyDown=${handleKeyDown}
-          disabled=${sessionEnded || sending}
+          disabled=${blocked || sending}
           maxlength="1000"
         ></textarea>
         <button
           class="btn-send-main"
           type="submit"
           aria-label="Send message"
-          disabled=${!text.trim() || sessionEnded || sending}
+          disabled=${!text.trim() || blocked || sending}
         >↑</button>
       </form>
     </div>
@@ -583,6 +590,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   const [votedPollId, setVotedPollId]   = useState(null);
   const [pollResults, setPollResults]   = useState(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [chatDisabled, setChatDisabled] = useState(false);
   const [loadError, setLoadError]       = useState('');
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -663,6 +671,14 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         setVotedPollId(null);
         setPollResults(event.poll);
         break;
+      case 'chat_toggled':
+        setChatDisabled(event.disabled);
+        if (event.disabled) {
+          setMessages([]);
+        } else {
+          loadMessages();
+        }
+        break;
       case 'session_ended':
         setSessionEnded(true);
         clearSession();
@@ -697,6 +713,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         return [...normalized, ...sseOnly].sort((a, b) => a.id - b.id);
       });
       if (data.active_poll) setActivePoll(data.active_poll);
+      setChatDisabled(!!data.chat_disabled);
     } catch (err) {
       if (err.status === 401) {
         clearSession();
@@ -827,6 +844,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         onOpenPicker=${handleOpenPicker}
         onSendReply=${handleSendReply}
         sessionEnded=${sessionEnded}
+        chatDisabled=${chatDisabled}
         feedRef=${feedRef}
         onScroll=${handleFeedScroll}
       />
@@ -847,6 +865,7 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         : html`<${MessageInput}
             onSend=${handleSend}
             sessionEnded=${sessionEnded}
+            chatDisabled=${chatDisabled}
             inputRef=${inputRef}
           />`
       }

@@ -1,10 +1,11 @@
 PRAGMA journal_mode=WAL;
 
 CREATE TABLE IF NOT EXISTS chat_sessions (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_pin TEXT NOT NULL,
-  started_at  TEXT DEFAULT (datetime('now')),
-  ended_at    TEXT
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_pin   TEXT NOT NULL,
+  started_at    TEXT DEFAULT (datetime('now')),
+  ended_at      TEXT,
+  chat_disabled INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS session_users (

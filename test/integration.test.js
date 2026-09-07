@@ -316,9 +316,15 @@ test('F: posting a reply to a reply returns 400', async () => {
   assert.ok(body.error?.includes('nested'), `error should mention nesting (got: "${body.error}")`);
 });
 
-// ── Test G: Instructor receives vote_update when student votes ────────────────
+// ── Test G: Instructor receives vote_update and chat_toggled over one connection
 
-test('G: instructor receives vote_update when student votes', async () => {
+// GET /stream is rate-limited to 5/min per IP (see routes/stream.js), and this
+// suite's other tests already use the full budget (A, B, C, D each open one).
+// Rather than opening dedicated connections for the chat-toggle broadcast, this
+// reuses G's existing instructor connection to verify chat_toggled delivery in
+// both directions; the student-side and disabled/history/polling behavior are
+// covered without SSE in tests H and I below.
+test('G: instructor receives vote_update and chat_toggled over the same SSE connection', async () => {
   const { queue: iQueue, stop: iStop } = await connectSse(iToken);
   const sToken = await joinSession(sessionPin, 'alice-g');
 
@@ -335,9 +341,76 @@ test('G: instructor receives vote_update when student votes', async () => {
     assert.ok(Array.isArray(event.tally), 'vote_update should include a tally array');
 
     await apiPost(`/poll/${poll.id}/close`, {}, iToken);
+
+    const disableRes = await apiPost('/session/chat/disable', {}, iToken);
+    assert.equal(disableRes.status, 200, 'POST /session/chat/disable should return 200');
+    const disabledEvent = await iQueue.waitFor(e => e.type === 'chat_toggled');
+    assert.equal(disabledEvent.disabled, true, 'instructor should receive chat_toggled(disabled: true)');
+
+    const enableRes = await apiPost('/session/chat/enable', {}, iToken);
+    assert.equal(enableRes.status, 200, 'POST /session/chat/enable should return 200');
+    const enabledEvent = await iQueue.waitFor(e => e.type === 'chat_toggled' && e.disabled === false);
+    assert.equal(enabledEvent.disabled, false, 'instructor should receive chat_toggled(disabled: false)');
   } finally {
     iStop();
   }
+});
+
+// ── Test H: Disabling chat hides history, blocks sending, keeps polls working ──
+
+test('H: disabling chat hides history and blocks sending; polls still work', async () => {
+  const sToken = await joinSession(sessionPin, 'alice-h');
+
+  // Seed a message while chat is enabled so there's history to hide/restore.
+  const seedBody = `seed-${Date.now()}`;
+  const seedRes = await apiPost('/message', { body: seedBody }, sToken);
+  assert.equal(seedRes.status, 201, 'seed message should post while chat is enabled');
+
+  const pollRes = await apiPost('/poll', { prompt: `Chat toggle poll ${Date.now()}`, options: ['A', 'B'] }, iToken);
+  assert.equal(pollRes.status, 201, 'POST /poll should return 201');
+  const { poll } = await pollRes.json();
+
+  try {
+    const disableRes = await apiPost('/session/chat/disable', {}, iToken);
+    assert.equal(disableRes.status, 200, 'POST /session/chat/disable should return 200');
+    const { chat_disabled } = await disableRes.json();
+    assert.equal(chat_disabled, true);
+
+    const blockedRes = await apiPost('/message', { body: 'should be blocked' }, sToken);
+    assert.equal(blockedRes.status, 403, 'POST /message should be rejected while chat is disabled');
+
+    const getRes = await fetch(`${BASE}/messages`, { headers: { Authorization: `Bearer ${sToken}` } });
+    assert.equal(getRes.status, 200);
+    const data = await getRes.json();
+    assert.deepEqual(data.messages, [], 'messages should be hidden from the student while chat is disabled');
+    assert.equal(data.chat_disabled, true);
+    assert.equal(data.active_poll?.id, poll.id, 'active poll should still be visible while chat is disabled');
+
+    const voteRes = await apiPost('/vote', { poll_id: poll.id, choice: 0 }, sToken);
+    assert.equal(voteRes.status, 201, 'voting should still work while chat is disabled');
+  } finally {
+    await apiPost(`/poll/${poll.id}/close`, {}, iToken);
+  }
+});
+
+// ── Test I: Re-enabling chat restores history and sending for students ────────
+
+test('I: re-enabling chat restores message history and sending for students', async () => {
+  const sToken = await joinSession(sessionPin, 'alice-i');
+
+  const enableRes = await apiPost('/session/chat/enable', {}, iToken);
+  assert.equal(enableRes.status, 200, 'POST /session/chat/enable should return 200');
+  const { chat_disabled } = await enableRes.json();
+  assert.equal(chat_disabled, false);
+
+  const getRes = await fetch(`${BASE}/messages`, { headers: { Authorization: `Bearer ${sToken}` } });
+  assert.equal(getRes.status, 200);
+  const data = await getRes.json();
+  assert.equal(data.chat_disabled, false);
+  assert.ok(data.messages.length > 0, 'history should reappear once chat is re-enabled');
+
+  const sendRes = await apiPost('/message', { body: `after-enable-${Date.now()}` }, sToken);
+  assert.equal(sendRes.status, 201, 'sending should work again once chat is re-enabled');
 });
 
 // ── Test D: Student receives session_ended (separate session) ─────────────────

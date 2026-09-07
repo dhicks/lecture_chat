@@ -152,6 +152,7 @@ message_new       New top-level message or reply
 reaction_update   Updated reaction counts for a message_id
 poll_new          A poll has been created (show voting UI)
 poll_closed       A poll closed (show results)
+chat_toggled      Instructor disabled/enabled chat ({ disabled: bool }); polls unaffected
 session_ended     Instructor ended the session
 ```
 

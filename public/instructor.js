@@ -150,10 +150,11 @@ function EndSessionDialog({ onConfirm, onCancel, triggerRef, busy }) {
 
 // SessionPanel ────────────────────────────────────────────────────────────────
 
-function SessionPanel({ token, session, onSessionStarted, onSessionEnded }) {
+function SessionPanel({ token, session, chatDisabled, onSessionStarted, onSessionEnded }) {
   const [busy, setBusy]             = useState(false);
   const [error, setError]           = useState('');
   const [copied, setCopied]         = useState(false);
+  const [chatBusy, setChatBusy]     = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const endBtnRef                   = useRef(null);
 
@@ -184,6 +185,19 @@ function SessionPanel({ token, session, onSessionStarted, onSessionEnded }) {
     } finally {
       setBusy(false);
       setShowEndDialog(false);
+    }
+  }
+
+  async function handleToggleChat() {
+    setError('');
+    setChatBusy(true);
+    try {
+      await apiFetch(`/session/chat/${chatDisabled ? 'enable' : 'disable'}`, { token, method: 'POST' });
+      // SSE chat_toggled event updates chatDisabled once the broadcast arrives
+    } catch (err) {
+      setError('Failed to update chat status.');
+    } finally {
+      setChatBusy(false);
     }
   }
 
@@ -226,7 +240,19 @@ function SessionPanel({ token, session, onSessionStarted, onSessionEnded }) {
           <p class="session-meta" aria-live="polite">
             ${copied ? 'PIN copied to clipboard.' : 'Share this PIN with your students.'}
           </p>
-          <div class="session-actions" style="margin-top:0.75rem;">
+          <p class="session-meta" aria-live="polite">
+            ${chatDisabled ? 'Chat is disabled for students.' : ''}
+          </p>
+          <div class="session-actions" style="margin-top:0.75rem; display:flex; gap:0.5rem;">
+            <button
+              class="btn btn-secondary btn-sm"
+              type="button"
+              aria-pressed=${String(chatDisabled)}
+              onClick=${handleToggleChat}
+              disabled=${chatBusy}
+            >
+              ${chatBusy ? 'Updating…' : chatDisabled ? 'Enable chat' : 'Disable chat'}
+            </button>
             <button
               ref=${endBtnRef}
               class="btn btn-danger btn-sm"
@@ -794,6 +820,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   const [messages, setMessages]     = useState([]);
   const [activePoll, setActivePoll] = useState(null);
   const [closedPolls, setClosedPolls] = useState([]);
+  const [chatDisabled, setChatDisabled] = useState(!!initialSession?.chat_disabled);
   const [pastSessions, setPastSessions] = useState([]);
   const [sessionTotal, setSessionTotal] = useState(0);
   const [currentPage, setCurrentPage]   = useState(0);
@@ -823,6 +850,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
             saveInstructorActiveSession(serverSession);
             setSession(serverSession);
           }
+          setChatDisabled(!!serverSession.chat_disabled);
           if (active_poll) setActivePoll(active_poll);
           if (closed_polls?.length) setClosedPolls(closed_polls);
         } else {
@@ -894,6 +922,9 @@ function DashboardScreen({ token, initialSession, onLogout }) {
         }
         setActivePoll(null);
         break;
+      case 'chat_toggled':
+        setChatDisabled(event.disabled);
+        break;
       case 'session_ended':
         clearInstructorActiveSession();
         setSession(null);
@@ -932,6 +963,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
     setMessages([]);
     setActivePoll(null);
     setClosedPolls([]);
+    setChatDisabled(false);
   }
 
   function handleSessionEnded() {
@@ -939,6 +971,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
     setMessages([]);
     setActivePoll(null);
     setClosedPolls([]);
+    setChatDisabled(false);
     sseRef.current?.stop();
   }
 
@@ -969,6 +1002,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
           <${SessionPanel}
             token=${token}
             session=${session}
+            chatDisabled=${chatDisabled}
             onSessionStarted=${handleSessionStarted}
             onSessionEnded=${handleSessionEnded}
           />

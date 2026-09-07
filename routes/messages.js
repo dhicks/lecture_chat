@@ -11,12 +11,29 @@ async function messageRoutes(app) {
 
     // Instructors have no session_id in their JWT; resolve from active session
     let session_id;
+    let chat_disabled;
     if (req.user.role === 'instructor') {
-      const session = db.prepare('SELECT id FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
+      const session = db.prepare('SELECT id, chat_disabled FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
       if (!session) return reply.send({ messages: [], active_poll: null });
       session_id = session.id;
+      chat_disabled = !!session.chat_disabled;
     } else {
       session_id = req.user.session_id;
+      const session = db.prepare('SELECT chat_disabled FROM chat_sessions WHERE id = ?').get(session_id);
+      chat_disabled = !!session?.chat_disabled;
+    }
+
+    // Chat is hidden from students while disabled — polls still work.
+    if (req.user.role === 'student' && chat_disabled) {
+      const activePollRow = db.prepare(`
+        SELECT id, prompt, options FROM polls
+        WHERE session_id = ? AND closed_at IS NULL
+        ORDER BY created_at DESC LIMIT 1
+      `).get(session_id);
+      const active_poll = activePollRow
+        ? { id: activePollRow.id, prompt: activePollRow.prompt, options: JSON.parse(activePollRow.options) }
+        : null;
+      return reply.send({ messages: [], active_poll, chat_disabled: true });
     }
 
     const topLevel = db.prepare(`
@@ -35,7 +52,7 @@ async function messageRoutes(app) {
       const active_poll = emptyPollRow
         ? { id: emptyPollRow.id, prompt: emptyPollRow.prompt, options: JSON.parse(emptyPollRow.options) }
         : null;
-      return reply.send({ messages: [], active_poll });
+      return reply.send({ messages: [], active_poll, chat_disabled });
     }
 
     const topIds = topLevel.map(m => m.id);
@@ -119,7 +136,7 @@ async function messageRoutes(app) {
       }
     }
 
-    return reply.send({ messages, active_poll });
+    return reply.send({ messages, active_poll, chat_disabled });
   });
 
   // POST /message — post a new message or reply
@@ -128,8 +145,9 @@ async function messageRoutes(app) {
     const { body, parent_id } = req.body || {};
     const db = app.db;
 
-    const session = db.prepare('SELECT ended_at FROM chat_sessions WHERE id = ?').get(session_id);
+    const session = db.prepare('SELECT ended_at, chat_disabled FROM chat_sessions WHERE id = ?').get(session_id);
     if (!session || session.ended_at) return reply.code(403).send({ error: 'Session has ended' });
+    if (session.chat_disabled) return reply.code(403).send({ error: 'Chat is disabled' });
 
     const member = db.prepare('SELECT id FROM session_users WHERE session_id = ? AND username = ?').get(session_id, username);
     if (!member) return reply.code(403).send({ error: 'Session membership required' });

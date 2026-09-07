@@ -10,6 +10,10 @@ Not currently manifesting on `view_updating` branch after porting the clean-clos
 
 Found while running `test/regression.sh` during the instructor PIN fix; pre-existing on `main`, not a regression. Two checks fail: voting on a closed poll returns 500 where 400 is expected, and voting after the session ends returns 500 where 403 is expected. The other routes handle both cases correctly, so the guard is likely missing in [`routes/polls.js`](routes/polls.js) and an unhandled exception is surfacing instead.
 
+### **`test/regression.sh` still asserts the old 4-option poll cap**
+
+Found while running `test/regression.sh` on the `feature/disable-chat-toggle` branch; pre-existing on `main`, not a regression. Commit `05b1760` ("Raise poll option cap from 4 to 12") updated `routes/polls.js` and the instructor UI but missed the `/poll 5 options → 400` check at [`test/regression.sh:264`](test/regression.sh#L264) — 5 options are valid now, so that poll gets created instead of rejected, and every assertion after it cascades from that one stale expectation (409 on the next poll, wrong vote/close targets, the script erroring out via `jq` on a null body). Fix: bump the "too many" case past the new cap of 12 (e.g. 13 options) and update the expected error message.
+
 ---
 
 ## Phase 5 — Frontend (student)

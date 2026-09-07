@@ -3,11 +3,20 @@
 const { requireInstructor, requireStudent } = require('../lib/auth');
 const { broadcast } = require('../lib/sse');
 
+function setChatDisabled(db, reply, disabled) {
+  const session = db.prepare('SELECT id FROM chat_sessions WHERE ended_at IS NULL').get();
+  if (!session) return reply.code(404).send({ error: 'No active session' });
+
+  db.prepare('UPDATE chat_sessions SET chat_disabled = ? WHERE id = ?').run(disabled ? 1 : 0, session.id);
+  broadcast(session.id, { type: 'chat_toggled', disabled });
+  return { chat_disabled: disabled };
+}
+
 async function sessionRoutes(app) {
   // GET /session/active — returns current active session + active poll, or nulls
   app.get('/active', { preHandler: requireInstructor }, async (req, reply) => {
     const db = app.db;
-    const session = db.prepare('SELECT id, session_pin FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
+    const session = db.prepare('SELECT id, session_pin, chat_disabled FROM chat_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1').get();
     if (!session) return { session: null, active_poll: null };
 
     const pollRow = db.prepare(
@@ -48,7 +57,11 @@ async function sessionRoutes(app) {
       };
     });
 
-    return { session: { id: session.id, pin: session.session_pin }, active_poll, closed_polls };
+    return {
+      session: { id: session.id, pin: session.session_pin, chat_disabled: !!session.chat_disabled },
+      active_poll,
+      closed_polls,
+    };
   });
 
   // POST /session/start
@@ -82,6 +95,16 @@ async function sessionRoutes(app) {
     db.prepare("UPDATE chat_sessions SET ended_at = datetime('now') WHERE id = ?").run(session.id);
     broadcast(session.id, { type: 'session_ended' });
     return { ok: true };
+  });
+
+  // POST /session/chat/disable — hide chat from students; polls stay active
+  app.post('/chat/disable', { preHandler: requireInstructor }, async (req, reply) => {
+    return setChatDisabled(app.db, reply, true);
+  });
+
+  // POST /session/chat/enable — restore chat history and sending for students
+  app.post('/chat/enable', { preHandler: requireInstructor }, async (req, reply) => {
+    return setChatDisabled(app.db, reply, false);
   });
 
   // DELETE /session/leave — student leaves the session (frees username slot)
