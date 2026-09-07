@@ -74,6 +74,8 @@ Then open two browser tabs:
 | Instructor dashboard | `http://localhost/instructor.html` | Manage sessions, polls, and view messages |
 | Student view | `http://localhost` | What students see on their devices |
 
+To close the server, use `Ctrl + \`
+
 ---
 
 ## Running a session
