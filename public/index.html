@@ -126,6 +126,28 @@
       flex-shrink: 0;
     }
     .chat-header h1 { font-size: 1.1rem; font-weight: 700; }
+    .chat-header .header-title { display: flex; align-items: center; gap: 0.45rem; }
+
+    /* ── SSE connection status dot ── */
+    /* Connected and disconnected differ in shape as well as colour, so the
+       state does not depend on colour perception alone. */
+    .conn-dot {
+      display: inline-block;
+      flex-shrink: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: transparent;               /* disconnected: hollow red ring */
+      border: 2.5px solid var(--danger);
+    }
+    .conn-dot[data-connected="true"] {       /* connected: solid blue disc */
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    @media (forced-colors: active) {
+      .conn-dot { background: Canvas; border-color: CanvasText; }
+      .conn-dot[data-connected="true"] { background: CanvasText; border-color: CanvasText; }
+    }
     .chat-header .username-badge {
       font-size: 0.85rem;
       color: var(--muted);
@@ -403,6 +425,17 @@
       text-align: center;
       font-size: 0.9rem;
       flex-shrink: 0;
+    }
+
+    /* Rejoin button inside the session-ended banner — .btn is full-width by
+       default via .btn-primary, so size this one down to sit inline. */
+    .session-rejoin-btn {
+      display: inline-flex;
+      width: auto;
+      min-height: 36px;
+      padding: 0.3rem 0.9rem;
+      margin-left: 0.6rem;
+      font-size: 0.85rem;
     }
 
     /* ── Loading state ── */

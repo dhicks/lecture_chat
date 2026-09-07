@@ -2,9 +2,41 @@
 
 ## Symptom
 
-SSE events (new messages, reactions, polls) sometimes fail to appear in student and instructor views without a page reload. Behavior is intermittent — present consistently on `main`, not observed on `view_updating` after the fixes below.
+SSE events (new messages, reactions, polls) sometimes fail to appear in the student view without a page reload. Behavior is intermittent.
+
+**Sharpened 2026-09-07.** A server log captured during a failing run shows the precise shape of the failure: **the student's browser never issues `GET /stream` at all.** No request reaches the server, no error is raised, and no rate limit is hit. The instructor's stream, opened moments earlier, stays live throughout — which is why the instructor view keeps updating while the student view goes dead.
+
+The reload that appears to "fix" it does not reconnect the stream. It repopulates the feed from `GET /messages`, so the view looks correct and is immediately stale again. That masking is why this bug has survived several investigation rounds.
 
 A related point: if a session is active when the server is stopped, it remains active on restart.
+
+---
+
+## Current Status (2026-09-07)
+
+Root cause **unknown and not reproducible on demand**. It depends on browser state: a clean Chrome and a clean Firefox both work correctly in every ordering and origin combination tried, including replays of the exact timeline from the failing server log.
+
+Rather than continue chasing it, the failure has been made **visible**. See "Reading the connection dot" below.
+
+---
+
+## Ruled Out (2026-09-07 session)
+
+Each of these was tested and disproved, not merely argued away:
+
+1. **`/stream` rate limiting.** The failing server log contains no 429 of any kind. (The limit is real and can be triggered — 5 connections/minute per IP, easily exhausted by repeated reloads while hand-testing — but it is not what happened here.)
+2. **The manual-testing reload loop.** Reproduced a 429 lockout deliberately by reloading six times in a minute; the symptoms differ from the reported ones and the server log shows the 429s.
+3. **Firefox same-URL request coalescing.** Tested in real Firefox with the instructor holding `/stream` open and the student requesting the identical URL. The student connected normally.
+4. **`localhost` vs `127.0.0.1` origin collision.** Tested both same-origin and cross-origin configurations in Firefox. Both worked.
+5. **Server-side delivery.** Both streams receive every event when connected. Confirmed repeatedly.
+
+---
+
+## Separate Bug, Not a Cause of This One
+
+`@fastify/rate-limit` keys on `req.ip`, and `server.js` sets no `trustProxy`. Behind Railway's proxy, `req.ip` is the *proxy's* address for every request, so all rate-limit buckets become global across all users: 5 `/stream` connections per minute and 12 messages per minute **for the entire class**. A lecture hall behind campus NAT has the same problem without any proxy.
+
+This is disproved as the cause of the symptom above (no 429 in the log) but is a genuine production defect. Tracked in `TODO.md`.
 
 ---
 
@@ -38,16 +70,31 @@ The bug stopped manifesting after these changes, but it is not confirmed resolve
 
 ---
 
-## What to Check if Bug Returns
+## Reading the Connection Dot
 
-Open browser DevTools console on both tabs. Look for:
-- `[SSE:instructor] session effect running, session.id= X` — did the effect fire at all?
-- `[SSE:instructor] connecting…` — did `createSseClient` get called?
-- `[SSE:instructor] connected` — did the HTTP handshake succeed?
-- `[SSE:instructor] event: {…}` — are events arriving but the UI not updating?
-- `[SSE:instructor] clean close, reconnecting…` — did a server restart trigger a reconnect?
+Both headers now carry a small dot showing whether the SSE stream is actually connected:
 
-The diagnostics remain in place; no additional instrumentation is needed.
+- **Solid blue disc** — connected, live updates are arriving.
+- **Hollow red ring** — not connected. Anything on screen may be stale.
+- **No dot at all** (instructor only) — no active session, so there is nothing to connect to.
+
+The dot appears within about 1.5 seconds of a real disconnect; brief reconnects are deliberately not shown, to avoid flicker and repeated screen-reader announcements.
+
+**If the bug returns, the dot answers the first question immediately: is the stream down, or is the stream up and the UI not rendering?** A red dot means the connection failed. A blue dot with a stale feed means something else is wrong, and the investigation should move to the rendering path.
+
+## What to Check if the Bug Returns
+
+With a red dot showing, open DevTools on the student tab:
+
+**Console** — look for the `[SSE:student]` lines:
+- No `connecting…` line at all → `connectSse()` never ran; the mount effect did not fire.
+- `connecting…` with no `connected`, and nothing in the server log → the request was created but never dispatched by the browser. This is the state the original failing log implies.
+- `auth rejected (401), not retrying` → the token is for an ended session; the banner should say so.
+
+**Network tab** (turn on Persist Logs) — find the row for `stream`:
+- absent → the browser never created the request
+- present but pending/blocked with no status → created but never sent
+- present with a status code → the server answered; the code says what happened
 
 ---
 

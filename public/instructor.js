@@ -34,6 +34,7 @@ function clearInstructorSession() {
 // ── Shared utilities ──────────────────────────────────────────────────────────
 
 import { apiFetch, createSseClient, formatTime, formatDateTime } from './lib.js';
+import { ConnectionDot } from './components.js';
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -824,6 +825,7 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   const [pastSessions, setPastSessions] = useState([]);
   const [sessionTotal, setSessionTotal] = useState(0);
   const [currentPage, setCurrentPage]   = useState(0);
+  const [connected, setConnected]       = useState(false);
   const PAGE_SIZE = 10;
 
   const sseRef = useRef(null);
@@ -936,7 +938,8 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   // ── Connect SSE and load messages on session change ─────────────────────────
 
   useEffect(() => {
-    if (!session) return;
+    // With no active session there is no stream to be connected to.
+    if (!session) { setConnected(false); return; }
 
     (async () => {
       try {
@@ -953,7 +956,11 @@ function DashboardScreen({ token, initialSession, onLogout }) {
     })();
 
     sseRef.current?.stop();
-    sseRef.current = createSseClient(token, handleSseEvent, 'instructor');
+    sseRef.current = createSseClient(token, handleSseEvent, 'instructor', {
+      onStatus: setConnected,
+      // 401/403 here means the instructor JWT is no longer valid.
+      onFatal: () => onLogout(),
+    });
 
     return () => sseRef.current?.stop();
   }, [session?.id]);
@@ -986,7 +993,10 @@ function DashboardScreen({ token, initialSession, onLogout }) {
   return html`
     <div class="dashboard">
       <header class="dash-header">
-        <h1>Lecture Chat — Instructor</h1>
+        <div class="header-title">
+          <h1>Lecture Chat — Instructor</h1>
+          ${session && html`<${ConnectionDot} connected=${connected} />`}
+        </div>
         <button
           class="btn btn-secondary btn-sm"
           type="button"
