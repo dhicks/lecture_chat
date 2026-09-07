@@ -63,7 +63,7 @@ async function pollRoutes(app) {
   });
 
   // POST /vote — student submits a vote
-  app.post('/vote', { preHandler: requireStudent, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, (req, reply) => {
+  app.post('/vote', { preHandler: requireStudent, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, (req, reply) => {
     const { session_id, username } = req.user;
     const { poll_id, choice } = req.body || {};
     const db = app.db;

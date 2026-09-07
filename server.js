@@ -50,6 +50,7 @@ app.register(require('@fastify/rate-limit'), {
   max: 60,
   timeWindow: '1 minute',
   errorResponseBuilder: (_req, context) => ({
+    statusCode: context.statusCode,
     error: `Too many requests — try again in ${context.after}`,
   }),
 });

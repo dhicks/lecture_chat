@@ -260,8 +260,8 @@ check "student JWT on /poll → 403" "403" "$STATUS"
 
 STATUS=$(http POST "$BASE/poll" -H "Authorization: Bearer $INST" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"Too many","options":["A","B","C","D","E"]}')
-check "/poll 5 options → 400" "400" "$STATUS"
+  -d '{"prompt":"Too many","options":["A","B","C","D","E","F","G","H","I","J","K","L","M"]}')
+check "/poll 13 options → 400" "400" "$STATUS"
 
 STATUS=$(http POST "$BASE/poll" -H "Authorization: Bearer $INST" \
   -H "Content-Type: application/json" -d '{"prompt":"Too few","options":["A"]}')

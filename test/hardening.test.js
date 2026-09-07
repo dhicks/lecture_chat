@@ -172,6 +172,31 @@ test('POST /poll returns 409 when a poll is already open', async () => {
   await apiPost(`/poll/${openPoll.id}/close`, {}, iToken);
 });
 
+// ── Rate limiting — exceeding a cap returns 429, not 500 ─────────────────────
+
+test('exceeding a per-route rate limit returns 429, not 500', async () => {
+  const pollRes = await apiPost('/poll', {
+    prompt: `Rate limit test ${Date.now()}`,
+    options: ['A', 'B'],
+  }, iToken);
+  assert.equal(pollRes.status, 201);
+  const { poll } = await pollRes.json();
+
+  // POST /vote is capped at 10/min per route (routes/polls.js); revoting is
+  // allowed (INSERT OR REPLACE), so 10 valid votes exhaust the budget cleanly.
+  for (let i = 0; i < 10; i++) {
+    const res = await apiPost('/vote', { poll_id: poll.id, choice: 0 }, sToken);
+    assert.equal(res.status, 201, `vote ${i + 1} should succeed`);
+  }
+
+  const res = await apiPost('/vote', { poll_id: poll.id, choice: 0 }, sToken);
+  assert.equal(res.status, 429, 'the 11th vote within the window should be rate-limited, not 500');
+  const json = await res.json();
+  assert.ok(json.error, 'rate-limit response should include an error field');
+
+  await apiPost(`/poll/${poll.id}/close`, {}, iToken);
+});
+
 // ── POST /react — emoji whitelist ─────────────────────────────────────────────
 
 test('POST /react rejects an emoji outside the allowed set with 400', async () => {
