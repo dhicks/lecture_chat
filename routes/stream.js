@@ -16,6 +16,16 @@ async function streamRoutes(app) {
       session_id = session.id;
     } else {
       session_id = req.user.session_id;
+      // A student token outlives its session, so a leftover tab would otherwise
+      // register as a live client on a session that has already ended.
+      // 401 rather than the 403 used in routes/messages.js for this condition:
+      // the frontend already treats 401 as "this token is dead, go rejoin".
+      const session = app.db
+        .prepare('SELECT id, ended_at FROM chat_sessions WHERE id = ?')
+        .get(session_id);
+      if (!session || session.ended_at) {
+        return reply.code(401).send({ error: 'Session has ended' });
+      }
     }
 
     reply.hijack(); // Take full control — prevent Fastify from finalizing the response

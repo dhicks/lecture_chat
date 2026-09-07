@@ -69,6 +69,28 @@
       z-index: 10;
     }
     .dash-header h1 { font-size: 1.1rem; font-weight: 700; }
+    .dash-header .header-title { display: flex; align-items: center; gap: 0.5rem; }
+
+    /* ── SSE connection status dot ── */
+    /* Connected and disconnected differ in shape as well as colour, so the
+       state does not depend on colour perception alone. */
+    .conn-dot {
+      display: inline-block;
+      flex-shrink: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: transparent;               /* disconnected: hollow red ring */
+      border: 2.5px solid var(--danger);
+    }
+    .conn-dot[data-connected="true"] {       /* connected: solid blue disc */
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    @media (forced-colors: active) {
+      .conn-dot { background: Canvas; border-color: CanvasText; }
+      .conn-dot[data-connected="true"] { background: CanvasText; border-color: CanvasText; }
+    }
 
     .dash-main {
       flex: 1;

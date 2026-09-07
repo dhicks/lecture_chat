@@ -21,23 +21,82 @@ export async function apiFetch(path, { token, method = 'GET', body } = {}) {
 // Native EventSource doesn't support Authorization header, so we use fetch +
 // ReadableStream and parse the SSE protocol manually.
 // `label` is used for console log prefixes (e.g. 'student' or 'instructor').
+//
+// Options:
+//   onStatus(connected)        called only when the connected state changes
+//   onFatal({ status, error }) called once when the server rejects the token;
+//                              no further connection attempts are made
+//   url                        overridable so Node tests can reach a stub server
+//   disconnectGraceMs          delay before reporting a disconnect, so a fast
+//                              reconnect doesn't flash the status indicator or
+//                              churn its screen-reader announcement
 
-export function createSseClient(token, onEvent, label = 'client') {
+export function createSseClient(token, onEvent, label = 'client', options = {}) {
+  const {
+    onStatus = null,
+    onFatal = null,
+    url = '/stream',
+    disconnectGraceMs = 1500,
+  } = options;
+
   let abortCtrl = null;
   let retryDelay = 250;
   let stopped = false;
+
+  let connected = false;   // last state reported through onStatus
+  let graceTimer = null;
+  let retryTimer = null;
+
+  function setStatus(next) {
+    if (next === connected) return;
+    connected = next;
+    try { onStatus?.(next); } catch (_) {}
+  }
+
+  function markConnected() {
+    clearTimeout(graceTimer);
+    graceTimer = null;
+    setStatus(true);
+  }
+
+  // Report a drop only if it outlasts the grace period; a reconnect within that
+  // window cancels the timer via markConnected and is never reported at all.
+  function markDisconnected() {
+    if (!connected || graceTimer) return;
+    if (disconnectGraceMs <= 0) { setStatus(false); return; }
+    graceTimer = setTimeout(() => { graceTimer = null; setStatus(false); }, disconnectGraceMs);
+  }
+
+  // Cancellable so stop() doesn't leave a pending backoff timer behind.
+  function sleep(ms) {
+    return new Promise(resolve => { retryTimer = setTimeout(resolve, ms); });
+  }
 
   async function connect() {
     if (stopped) return;
     abortCtrl = new AbortController();
     console.log(`[SSE:${label}] connecting…`);
     try {
-      const res = await fetch('/stream', {
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
         signal: abortCtrl.signal,
       });
+      // The token is no longer usable — the session ended, or it expired.
+      // Retrying cannot help, and would hold a rate-limit slot indefinitely.
+      if (res.status === 401 || res.status === 403) {
+        stopped = true;
+        clearTimeout(graceTimer);
+        graceTimer = null;
+        setStatus(false);
+        let body = {};
+        try { body = await res.json(); } catch (_) {}
+        console.log(`[SSE:${label}] auth rejected (${res.status}), not retrying`);
+        onFatal?.({ status: res.status, error: body.error || 'Unauthorized' });
+        return;
+      }
       if (!res.ok || !res.body) throw new Error(`SSE status ${res.status}`);
       console.log(`[SSE:${label}] connected`);
+      markConnected();
       retryDelay = 250; // reset on successful connect
 
       const reader = res.body.getReader();
@@ -68,22 +127,34 @@ export function createSseClient(token, onEvent, label = 'client') {
       // Server closed connection cleanly (done:true) — reconnect with backoff
       if (!stopped) {
         console.log(`[SSE:${label}] clean close, reconnecting in ${retryDelay}ms`);
-        await new Promise(r => setTimeout(r, retryDelay));
+        markDisconnected();
+        await sleep(retryDelay);
         retryDelay = Math.min(retryDelay * 2, 30000);
         connect();
       }
     } catch (err) {
       if (err.name === 'AbortError' || stopped) return;
       console.log(`[SSE:${label}] error, reconnecting in ${retryDelay}ms:`, err);
+      markDisconnected();
       // Reconnect with exponential backoff (cap at 30s)
-      await new Promise(r => setTimeout(r, retryDelay));
+      await sleep(retryDelay);
       retryDelay = Math.min(retryDelay * 2, 30000);
       connect();
     }
   }
 
   connect();
-  return { stop() { stopped = true; abortCtrl?.abort(); } };
+  return {
+    stop() {
+      stopped = true;
+      clearTimeout(graceTimer);
+      graceTimer = null;
+      clearTimeout(retryTimer);
+      retryTimer = null;
+      setStatus(false);   // explicit teardown reports immediately, no grace
+      abortCtrl?.abort();
+    },
+  };
 }
 
 // ── Time formatting ───────────────────────────────────────────────────────────

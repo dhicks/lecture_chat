@@ -39,6 +39,7 @@ function clearSession() {
 // ── Shared utilities ──────────────────────────────────────────────────────────
 
 import { apiFetch, createSseClient, formatTime } from './lib.js';
+import { ConnectionDot } from './components.js';
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,13 @@ function JoinScreen({ onJoined }) {
   const [username, setUsername] = useState('');
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState(false);
+  const pinInputRef             = useRef(null);
+
+  // Move focus to the first field on mount, so arriving here from the chat
+  // screen (Rejoin, or a rejected token) doesn't drop focus onto <body>.
+  useEffect(() => {
+    pinInputRef.current?.focus();
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -81,6 +89,7 @@ function JoinScreen({ onJoined }) {
           <label for="pin-input">Session PIN</label>
           <input
             id="pin-input"
+            ref=${pinInputRef}
             type="text"
             inputmode="numeric"
             maxlength="4"
@@ -590,7 +599,11 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   const [votedPollId, setVotedPollId]   = useState(null);
   const [pollResults, setPollResults]   = useState(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+  // Why the session is over: 'ended' = instructor ended it while we watched;
+  // 'rejected' = the server refused our token, so this tab is a leftover.
+  const [endedReason, setEndedReason]   = useState(null);
   const [chatDisabled, setChatDisabled] = useState(false);
+  const [connected, setConnected]       = useState(false);
   const [loadError, setLoadError]       = useState('');
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -681,10 +694,19 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
         break;
       case 'session_ended':
         setSessionEnded(true);
+        setEndedReason('ended');
         clearSession();
         sseRef.current?.stop();
         break;
     }
+  }
+
+  // The server rejected our token — the session it belongs to is over. The
+  // client has already stopped itself, so don't touch sseRef here.
+  function handleStreamFatal() {
+    setSessionEnded(true);
+    setEndedReason('rejected');
+    clearSession();
   }
 
   // ── Load messages ───────────────────────────────────────────────────────────
@@ -728,7 +750,10 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
 
   function connectSse() {
     sseRef.current?.stop();
-    sseRef.current = createSseClient(token, handleSseEvent, 'student');
+    sseRef.current = createSseClient(token, handleSseEvent, 'student', {
+      onStatus: setConnected,
+      onFatal: handleStreamFatal,
+    });
   }
 
   // ── On mount ────────────────────────────────────────────────────────────────
@@ -798,7 +823,10 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
   return html`
     <main class="chat-shell">
       <header class="chat-header">
-        <h1>Lecture Chat</h1>
+        <div class="header-title">
+          <h1>Lecture Chat</h1>
+          <${ConnectionDot} connected=${connected} />
+        </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.1rem;">
           ${pin && html`<span style="font-size:0.75rem; font-weight:700; color:var(--accent); letter-spacing:0.1em;">PIN: ${pin}</span>`}
           <button
@@ -860,7 +888,14 @@ function ChatScreen({ token, username, pin, onSessionEnd }) {
 
       ${sessionEnded
         ? html`<div class="session-ended-banner" role="alert" aria-live="assertive">
-            Session has ended. Thanks for participating!
+            ${endedReason === 'rejected'
+              ? html`
+                  Your session is no longer active.
+                  <button class="btn btn-secondary session-rejoin-btn" onClick=${onSessionEnd}>
+                    Rejoin
+                  </button>
+                `
+              : 'Session has ended. Thanks for participating!'}
           </div>`
         : html`<${MessageInput}
             onSend=${handleSend}

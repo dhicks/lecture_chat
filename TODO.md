@@ -2,9 +2,27 @@
 
 ## Bugs
 
-### **Intermittent: instructor and student views not always updating in real time**
+### **Intermittent: student view not always updating in real time**
 
-Not currently manifesting on `view_updating` branch after porting the clean-close reconnect fix to `public/instructor.js` and adding SSE diagnostics to both views. Not confirmed resolved — behavior was intermittent before. Full investigation notes and console diagnostic guide: [`docs/sse-bug.md`](docs/sse-bug.md).
+Root cause still **unknown**. Narrowed considerably: a failing server log shows the student's browser never issues `GET /stream` at all — no request, no error, no rate limit. Not reproducible on demand; clean Chrome and clean Firefox both work.
+
+Not fixed, but no longer silent: both views now show a connection dot (blue = connected, red = not), so the next occurrence is visible immediately and distinguishes "stream is down" from "stream is up but the UI isn't rendering". Ruled-out hypotheses and a diagnostic guide: [`docs/sse-bug.md`](docs/sse-bug.md).
+
+- [ ] Capture DevTools console + Network evidence from the student tab the next time a red dot appears during a real session
+
+### Rate limiting is keyed per IP, not per user
+
+`@fastify/rate-limit` uses `req.ip` and `server.js` sets no `trustProxy`. Behind Railway's proxy every request carries the proxy's address, so all buckets are shared by the whole class: 5 `/stream` connections/min and 12 messages/min **total**. Same problem for a lecture hall behind campus NAT. Not the cause of the bug above (no 429 in the failing log), but a real production defect.
+
+- [ ] Set `trustProxy` in `server.js` so limits apply per student
+- [ ] Re-tune the `/stream` limit — request count is a poor fit for a long-lived stream
+
+### Smaller gaps found alongside the SSE work
+
+- [ ] `GET /messages` has no `ended_at` check for students, so a leftover tab still renders a stale feed on load (`/stream` now rejects these with 401, so the banner covers it)
+- [ ] `GET /stream` does not check `session_users` membership, so a student who used `DELETE /session/leave` can still open a stream on a live session (`routes/messages.js:152` guards this correctly)
+- [ ] Graceful shutdown hangs: the `SIGTERM`/`SIGINT` handler awaits `app.close()`, which never resolves while hijacked SSE responses are open. Needs the open streams closed first.
+- [ ] `lib/sse.js` `broadcast()` detects dead clients by catching a throw from `reply.raw.write()`, but Node returns `false` and emits `'error'` asynchronously instead of throwing — so that cleanup path never runs in production. Cleanup currently happens only via `req.raw.on('close')`. The unit test passes because its mock throws.
 
 ---
 

@@ -338,6 +338,61 @@ test('changing INSTRUCTOR_PIN changes the login PIN on an existing database', as
   }
 });
 
+// ── /stream rejects a token whose session has ended ───────────────────────────
+//
+// Uses its own server so it can end a session without breaking the shared
+// fixture above, and so it gets a fresh /stream rate-limit bucket.
+
+test('GET /stream returns 401 for a student token whose session has ended', async () => {
+  const db = '/tmp/lecture_chat_stream_ended_test.db';
+  await unlink(db).catch(() => {});
+
+  const { proc, base } = await spawnServer('333333', db);
+  try {
+    const { token: instructorToken } = await (await login(base, '333333')).json();
+
+    const startRes = await fetch(`${base}/session/start`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${instructorToken}` },
+    });
+    assert.equal(startRes.status, 200, 'session/start should succeed');
+    const { session_pin } = await startRes.json();
+
+    const joinRes = await fetch(`${base}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_pin, username: 'stale-tab-user' }),
+    });
+    assert.equal(joinRes.status, 200, 'join should succeed');
+    const { token: studentToken } = await joinRes.json();
+
+    // Sanity check: the token works while the session is live.
+    const liveRes = await fetch(`${base}/stream`, {
+      headers: { Authorization: `Bearer ${studentToken}` },
+    });
+    assert.equal(liveRes.status, 200, 'stream should connect while the session is active');
+    // The response is hijacked and never ends; cancel it so teardown can finish.
+    await liveRes.body.cancel();
+
+    const endRes = await fetch(`${base}/session/end`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${instructorToken}` },
+    });
+    assert.equal(endRes.status, 200, 'session/end should succeed');
+
+    const staleRes = await fetch(`${base}/stream`, {
+      headers: { Authorization: `Bearer ${studentToken}` },
+    });
+    assert.equal(staleRes.status, 401, 'stream should reject a token for an ended session');
+    const body = await staleRes.json();
+    assert.match(body.error, /ended/i);
+  } finally {
+    proc.kill();
+    await new Promise(resolve => proc.on('close', resolve));
+    await unlink(db).catch(() => {});
+  }
+});
+
 test('server exits with code 1 and logs an error when DB_PATH directory does not exist', async () => {
   const badProcess = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
