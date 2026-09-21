@@ -232,10 +232,11 @@ Rate limits (`rateLimitKey` in `server.js`): requests with a valid student token
 
 ```bash
 railway volume files upload ./data/roster.csv /roster.csv   # second path is inside the volume; volume mounted at /data → /data/roster.csv
+railway volume files --volume lecture_chat-volume list /     # confirm roster.csv is next to chat.db (--volume required non-interactively)
 railway volume browse /                                      # interactive TUI: browse, upload, download, edit, delete
 ```
 
-Set `ROSTER_PATH=/data/roster.csv`. Re-upload to replace the roster; `/join` re-reads it, so no restart is needed. Volumes are mounted when the service starts, not at build time, so uploads need a running container. Because the server exits at startup without a roster, upload it before deploying a version that requires it. The volume-path form and this ordering are inferred from the docs and untested here.
+Set `ROSTER_PATH=/data/roster.csv` (the volume-relative path `/roster.csv` becomes `/data/roster.csv` because the volume is mounted at `/data`; verified). Re-upload to replace the roster; `/join` re-reads it, so no restart is needed. Volumes are mounted when the service starts, not at build time, so uploads need a running container. The server exits at startup without a roster, so a deploy without one fails its healthcheck (the deploy log shows `cannot load roster: ENOENT`). Recovery: redeploy the last working deployment, upload the roster, set `ROSTER_PATH`, deploy again.
 
 ---
 

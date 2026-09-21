@@ -206,9 +206,15 @@ The roster file (`roster.csv`, see [Student roster](#student-roster)) is not in 
 
 To replace the roster later (for example, after add/drop), upload the new file the same way. The server re-reads the file on every student login, so no redeploy or restart is needed.
 
-To look at the volume's contents, or to upload, download, edit, or delete files interactively, run `railway volume browse /`.
+To check that the file arrived, list the volume. `--volume` is required outside an interactive terminal; the volume name is on the Railway dashboard, and this project's volume is `lecture_chat-volume`:
 
-Railway mounts volumes when a service starts, not during the build, so the upload only works while the service has a running container. The server exits at startup when the roster is missing, so on a deployment where the roster is not yet on the volume, upload it before deploying this version of the app, while the previous version is still running. (Not yet tested on this project; see `TODO.md`.)
+```bash
+railway volume files --volume lecture_chat-volume list /
+```
+
+`roster.csv` should appear next to `chat.db`. To upload, download, edit, or delete files interactively, run `railway volume browse /`.
+
+Railway mounts volumes when a service starts, not during the build, so an upload needs a running container. The server exits at startup when the roster is missing, and Railway then reports a failed healthcheck (the deploy logs show `ERROR: cannot load roster: ENOENT`). If that happens, redeploy the last working deployment so a container is running, upload the roster, make sure `ROSTER_PATH` is set to `/data/roster.csv`, and deploy again.
 
 ### Health check
 
