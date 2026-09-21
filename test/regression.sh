@@ -53,7 +53,7 @@ pkill -f "node server.js" 2>/dev/null || true
 sleep 0.5
 rm -f "$TEST_DB"
 
-DB_PATH="$TEST_DB" node server.js >/tmp/lecture_chat_server.log 2>&1 &
+DB_PATH="$TEST_DB" ROSTER_PATH="test/fixtures/roster.csv" node server.js >/tmp/lecture_chat_server.log 2>&1 &
 SERVER_PID=$!
 
 # wait for server to be ready
@@ -106,13 +106,18 @@ check "second session/start while one active → 409" "409" "$STATUS"
 
 # Happy path: new username joins successfully
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
+  -d "{\"student_id\":\"1000001\",\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
 check "/join valid → 200" "200" "$STATUS"
 STU_ALICE=$(jq -r .token "$BODY")
 
+# Student ID not on the roster → rejected
+STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
+  -d "{\"student_id\":\"9999999\",\"session_pin\":\"$PIN\",\"username\":\"stranger\"}")
+check "/join student ID not on roster → 401" "401" "$STATUS"
+
 # Collision: username still active → rejected
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
+  -d "{\"student_id\":\"1000001\",\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
 check "/join duplicate username (collision) → 409" "409" "$STATUS"
 
 # Leave then rejoin: alice leaves, freeing her username slot; rejoins successfully
@@ -120,7 +125,7 @@ STATUS=$(http DELETE "$BASE/session/leave" -H "Authorization: Bearer $STU_ALICE"
 check "DELETE /session/leave → 200" "200" "$STATUS"
 
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
+  -d "{\"student_id\":\"1000001\",\"session_pin\":\"$PIN\",\"username\":\"alice\"}")
 check "/join after leave → 200" "200" "$STATUS"
 STU_ALICE=$(jq -r .token "$BODY")
 [[ -n "$STU_ALICE" && "$STU_ALICE" != "null" ]] \
@@ -128,7 +133,7 @@ STU_ALICE=$(jq -r .token "$BODY")
   || { echo "FAIL: rejoin after leave did not return a JWT"; FAILURES=$((FAILURES + 1)); }
 
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d '{"session_pin":"0000","username":"nobody"}')
+  -d '{"student_id":"1000001","session_pin":"0000","username":"nobody"}')
 check "/join wrong PIN → 401" "401" "$STATUS"
 
 STATUS=$(http POST "$BASE/session/start" -H "Authorization: Bearer $STU_ALICE")
@@ -140,7 +145,7 @@ check "instructor JWT on student route → 403" "403" "$STATUS"
 
 # join bob before opening SSE
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN\",\"username\":\"bob\"}")
+  -d "{\"student_id\":\"1000002\",\"session_pin\":\"$PIN\",\"username\":\"bob\"}")
 check "/join bob → 200" "200" "$STATUS"
 STU_BOB=$(jq -r .token "$BODY")
 
@@ -343,7 +348,7 @@ STATUS=$(http POST "$BASE/poll" -H "Authorization: Bearer $INST" \
   -H "Content-Type: application/json" -d '{"prompt":"Cats or dogs?","options":["Cats","Dogs"]}')
 POLL2_ID=$(jq -r .poll.id "$BODY")
 http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN\",\"username\":\"diana\"}" >/dev/null
+  -d "{\"student_id\":\"2000001\",\"session_pin\":\"$PIN\",\"username\":\"diana\"}" >/dev/null
 STU_DIANA=$(jq -r .token "$BODY")
 STATUS=$(http GET "$BASE/messages" -H "Authorization: Bearer $STU_DIANA")
 AP2_ID=$(jq -r ".active_poll.id" "$BODY")
@@ -366,7 +371,7 @@ ENDED=$(sqlite3 "$TEST_DB" \
 check "session row has ended_at set" "1" "$ENDED"
 
 STATUS=$(http POST "$BASE/join" -H "Content-Type: application/json" \
-  -d "{\"session_pin\":\"$PIN\",\"username\":\"latecomer\"}")
+  -d "{\"student_id\":\"2000002\",\"session_pin\":\"$PIN\",\"username\":\"latecomer\"}")
 check "/join on ended session → 401" "401" "$STATUS"
 
 STATUS=$(http POST "$BASE/message" -H "Authorization: Bearer $STU_ALICE" \

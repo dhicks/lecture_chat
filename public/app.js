@@ -46,35 +46,38 @@ import { ConnectionDot } from './components.js';
 // JoinScreen ──────────────────────────────────────────────────────────────────
 
 function JoinScreen({ onJoined }) {
-  const [pin, setPin]           = useState('');
-  const [username, setUsername] = useState('');
-  const [error, setError]       = useState('');
-  const [busy, setBusy]         = useState(false);
-  const pinInputRef             = useRef(null);
+  const [studentId, setStudentId] = useState('');
+  const [pin, setPin]             = useState('');
+  const [username, setUsername]   = useState('');
+  const [error, setError]         = useState('');
+  const [busy, setBusy]           = useState(false);
+  const studentIdInputRef         = useRef(null);
 
   // Move focus to the first field on mount, so arriving here from the chat
   // screen (Rejoin, or a rejected token) doesn't drop focus onto <body>.
   useEffect(() => {
-    pinInputRef.current?.focus();
+    studentIdInputRef.current?.focus();
   }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (!pin.trim() || !username.trim()) {
-      setError('Please enter both a session PIN and a username.');
+    if (!studentId.trim() || !pin.trim() || !username.trim()) {
+      setError('Please enter your student ID, the session PIN, and a username.');
       return;
     }
     setBusy(true);
     try {
       const data = await apiFetch('/join', {
         method: 'POST',
-        body: { session_pin: pin.trim(), username: username.trim() },
+        body: { student_id: studentId.trim(), session_pin: pin.trim(), username: username.trim() },
       });
       saveSession(data.token, username.trim(), pin.trim());
       onJoined(data.token, username.trim(), pin.trim());
     } catch (err) {
-      if (err.status === 401) setError('Invalid session PIN or session has ended.');
+      if (err.status === 401 && /roster/i.test(err.message)) setError('Student ID not found on the class roster. Check the number and try again.');
+      else if (err.status === 401) setError('Invalid session PIN or session has ended.');
+      else if (err.status === 400) setError('Student ID must be numeric.');
       else if (err.status === 409) setError('That username is already taken. Please choose another.');
       else setError('Something went wrong. Please try again.');
       setBusy(false);
@@ -86,10 +89,25 @@ function JoinScreen({ onJoined }) {
       <h1>Lecture Chat</h1>
       <form class="join-form" onSubmit=${handleSubmit} novalidate>
         <div class="field">
+          <label for="student-id-input">Student ID</label>
+          <input
+            id="student-id-input"
+            ref=${studentIdInputRef}
+            type="text"
+            inputmode="numeric"
+            maxlength="20"
+            autocomplete="off"
+            placeholder="Your student ID number"
+            value=${studentId}
+            onInput=${e => setStudentId(e.target.value)}
+            disabled=${busy}
+            required
+          />
+        </div>
+        <div class="field">
           <label for="pin-input">Session PIN</label>
           <input
             id="pin-input"
-            ref=${pinInputRef}
             type="text"
             inputmode="numeric"
             maxlength="4"
@@ -119,7 +137,11 @@ function JoinScreen({ onJoined }) {
             ${error}
           </div>
         `}
-        <button class="btn btn-primary" type="submit" disabled=${busy}>
+        <p id="logging-notice" class="join-notice">
+          Your student ID and IP address are recorded with each message you send.
+          Other students see only your username.
+        </p>
+        <button class="btn btn-primary" type="submit" disabled=${busy} aria-describedby="logging-notice">
           ${busy ? 'Joining…' : 'Join session'}
         </button>
       </form>

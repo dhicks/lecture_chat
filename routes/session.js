@@ -155,11 +155,11 @@ async function sessionRoutes(app) {
     if (!session) return reply.code(404).send({ error: 'Session not found' });
 
     const topMessages = db.prepare(
-      'SELECT id, username, body, created_at FROM messages WHERE session_id = ? AND parent_id IS NULL ORDER BY created_at ASC'
+      'SELECT id, username, student_id, ip_address, body, created_at FROM messages WHERE session_id = ? AND parent_id IS NULL ORDER BY created_at ASC'
     ).all(sessionId);
 
     const replies = db.prepare(
-      'SELECT id, parent_id, username, body, created_at FROM messages WHERE session_id = ? AND parent_id IS NOT NULL ORDER BY created_at ASC'
+      'SELECT id, parent_id, username, student_id, ip_address, body, created_at FROM messages WHERE session_id = ? AND parent_id IS NOT NULL ORDER BY created_at ASC'
     ).all(sessionId);
 
     const reactionRows = db.prepare(

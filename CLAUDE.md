@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A lightweight, real-time chat system for use during large university lectures. Students join via a browser with a session PIN (shown on lecture slides) and a username — no accounts required. The instructor controls the session from a separate dashboard.
+A lightweight, real-time chat system for use during large university lectures. Students join via a browser with their student ID, a session PIN (shown on lecture slides), and a username — no accounts required. The ID is checked against a roster CSV. The instructor controls the session from a separate dashboard.
 
 ---
 
@@ -35,14 +35,22 @@ No Redis, no message broker, no separate DB server.
 
 **Session PIN** (4 digits, randomly generated per session)
 - Displayed on lecture slides
-- Students enter PIN + username to join
+- Students enter student ID + PIN + username to join
 - Invalidated when instructor ends the session
+
+**Student ID** (numeric, up to 20 digits)
+- Checked against the roster CSV at `ROSTER_PATH` (header row with a `student_id` column; other columns ignored)
+- Compared as text, so leading zeros matter
+- The roster is re-read on every `/join`, so edits need no restart; the server exits at startup if the file is missing or malformed
+- Stored on `session_users` and `messages`, and carried in the student JWT (`student_id`). Tokens without it are rejected by `requireStudent`
+- Never sent to students: `GET /messages`, `POST /message` responses, and SSE events do not include `student_id` or `ip_address`. Only the instructor export does
+- One ID may join a session under several usernames; the username stays unique per session
 
 ### Session lifecycle
 
 1. Instructor logs in → hits dashboard
 2. Instructor clicks "Start Session" → 4-digit PIN generated, displayed prominently
-3. Students navigate to the app URL, enter PIN + username → issued a JWT (`role: student, session_id, username`)
+3. Students navigate to the app URL, enter student ID + PIN + username → issued a JWT (`role: student, session_id, username, student_id`)
 4. Instructor clicks "End Session" → session marked closed, PIN invalidated, no new joins accepted
 5. Instructor can export the session log at any time
 
@@ -66,6 +74,7 @@ CREATE TABLE session_users (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  INTEGER NOT NULL REFERENCES chat_sessions(id),
   username    TEXT NOT NULL,
+  student_id  TEXT,             -- from the roster; NULL for rows created before roster login
   joined_at   TEXT DEFAULT (datetime('now')),
   UNIQUE(session_id, username)
 );
@@ -75,6 +84,8 @@ CREATE TABLE messages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  INTEGER NOT NULL REFERENCES chat_sessions(id),
   username    TEXT NOT NULL,
+  student_id  TEXT,             -- sender's roster ID; NULL for older rows
+  ip_address  TEXT,             -- req.ip when the message was posted; NULL for older rows
   body        TEXT NOT NULL,
   parent_id   INTEGER REFERENCES messages(id),  -- NULL = top-level
   created_at  TEXT DEFAULT (datetime('now'))
@@ -121,7 +132,7 @@ All student routes require a valid student JWT. All instructor routes require a 
 | Method | Route | Description |
 |---|---|---|
 | POST | `/instructor/login` | Verify instructor PIN → return instructor JWT |
-| POST | `/join` | Verify session PIN + username → return student JWT |
+| POST | `/join` | Verify student ID (on roster) + session PIN + username → return student JWT. 300/min per client IP (a class behind one campus NAT address must be able to join together) |
 
 ### Instructor only
 | Method | Route | Description |
@@ -209,7 +220,13 @@ INSTRUCTOR_PIN=123456      # 6-digit instructor PIN (required; read on every log
 JWT_SECRET=<random string> # Secret for signing JWTs
 PORT=80
 DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persistent volume
+ROSTER_PATH=./data/roster.csv  # CSV of enrolled student IDs (header row with student_id column; required at startup)
+TRUST_PROXY_HOPS=0         # Proxies in front of the server (default 0; Railway: 1, confirm). Sets req.ip for the message log and rate limiter
 ```
+
+`req.ip` is logged with each message. Behind a proxy it is the proxy's address unless `TRUST_PROXY_HOPS` is set. A fixed count is used instead of `trustProxy: true` so clients cannot choose their own logged IP with an `X-Forwarded-For` header.
+
+Rate limits (`rateLimitKey` in `server.js`): requests with a valid student token are keyed by `student_id`; all others by `req.ip`. Students on one campus network may share an IP, so per-IP keys would make the whole class share one bucket. The token is verified, not just decoded, so a forged token cannot pick its own bucket. One student ID joined under several usernames shares one bucket.
 
 ---
 
@@ -230,7 +247,8 @@ DB_PATH=./data/chat.db     # Path for SQLite file — ensure this is on a persis
 │   └── stream.js          # /stream (SSE)
 ├── lib/
 │   ├── sse.js             # SSE client registry + broadcast helper
-│   └── auth.js            # JWT helpers, PIN hashing
+│   ├── auth.js            # JWT helpers, PIN hashing
+│   └── roster.js          # Load enrolled student IDs from the roster CSV
 ├── public/
 │   ├── index.html         # Student app
 │   ├── instructor.html    # Instructor dashboard

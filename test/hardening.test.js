@@ -33,6 +33,7 @@ before(async () => {
       JWT_SECRET:     'test-hardening-secret-xyz',
       PORT:           '0',  // OS picks a free port
       DB_PATH:        TEST_DB,
+      ROSTER_PATH:    path.join(__dirname, 'fixtures', 'roster.csv'),
     },
     stdio: 'pipe',
   });
@@ -68,7 +69,7 @@ before(async () => {
   assert.equal(sessionRes.status, 200, 'session/start should succeed');
   const { session_pin } = await sessionRes.json();
 
-  const joinRes = await apiPost('/join', { session_pin, username: 'hardening-user' });
+  const joinRes = await apiPost('/join', { student_id: '1000001', session_pin, username: 'hardening-user' });
   assert.equal(joinRes.status, 200, 'join should succeed');
   ({ token: sToken } = await joinRes.json());
 });
@@ -277,6 +278,7 @@ async function spawnServer(instructorPin, dbPath) {
       JWT_SECRET:     'test-pin-rotation-secret-xyz',
       PORT:           '0',
       DB_PATH:        dbPath,
+      ROSTER_PATH:    path.join(__dirname, 'fixtures', 'roster.csv'),
     },
     stdio: 'pipe',
   });
@@ -361,7 +363,7 @@ test('GET /stream returns 401 for a student token whose session has ended', asyn
     const joinRes = await fetch(`${base}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_pin, username: 'stale-tab-user' }),
+      body: JSON.stringify({ student_id: '1000001', session_pin, username: 'stale-tab-user' }),
     });
     assert.equal(joinRes.status, 200, 'join should succeed');
     const { token: studentToken } = await joinRes.json();
@@ -402,6 +404,7 @@ test('server exits with code 1 and logs an error when DB_PATH directory does not
       JWT_SECRET:     'test-dbpath-secret-xyz',
       PORT:           '0',
       DB_PATH:        '/tmp/nonexistent_dir_abc123xyz/chat.db',
+      ROSTER_PATH:    path.join(__dirname, 'fixtures', 'roster.csv'),
     },
     stdio: 'pipe',
   });
