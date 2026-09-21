@@ -93,7 +93,7 @@ function JoinScreen({ onJoined }) {
           <input
             id="student-id-input"
             ref=${studentIdInputRef}
-            type="text"
+            type="password"
             inputmode="numeric"
             maxlength="20"
             autocomplete="off"
@@ -120,12 +120,12 @@ function JoinScreen({ onJoined }) {
           />
         </div>
         <div class="field">
-          <label for="username-input">Your name</label>
+          <label for="username-input">Username</label>
           <input
             id="username-input"
             type="text"
             autocomplete="off"
-            placeholder="Enter your name"
+            placeholder="Choose a username"
             value=${username}
             onInput=${e => setUsername(e.target.value)}
             disabled=${busy}
