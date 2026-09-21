@@ -228,6 +228,15 @@ TRUST_PROXY_HOPS=0         # Proxies in front of the server (default 0; Railway:
 
 Rate limits (`rateLimitKey` in `server.js`): requests with a valid student token are keyed by `student_id`; all others by `req.ip`. Students on one campus network may share an IP, so per-IP keys would make the whole class share one bucket. The token is verified, not just decoded, so a forged token cannot pick its own bucket. One student ID joined under several usernames shares one bucket.
 
+**Roster on Railway.** The roster is not in git (`data/` is ignored), so it goes onto the persistent volume with the Railway CLI ([docs](https://docs.railway.com/volumes)):
+
+```bash
+railway volume files upload ./data/roster.csv /roster.csv   # second path is inside the volume; volume mounted at /data → /data/roster.csv
+railway volume browse /                                      # interactive TUI: browse, upload, download, edit, delete
+```
+
+Set `ROSTER_PATH=/data/roster.csv`. Re-upload to replace the roster; `/join` re-reads it, so no restart is needed. Volumes are mounted when the service starts, not at build time, so uploads need a running container. Because the server exits at startup without a roster, upload it before deploying a version that requires it. The volume-path form and this ordering are inferred from the docs and untested here.
+
 ---
 
 ## Project Structure

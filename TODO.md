@@ -72,7 +72,8 @@ Rate limits used to be keyed on `req.ip` alone, so behind Railway's proxy or cam
 - [ ] `curl https://<deployed-url>/healthz` → 200
 - [ ] Full happy path on production URL: instructor login → start session → student join → message → react → poll → end session
 - [ ] Redeploy (push a trivial commit) → chat history still present after redeploy (confirms persistent volume is working)
-- [ ] Put `roster.csv` on the persistent volume and set `ROSTER_PATH=/data/roster.csv`; a student on the roster can join, one off the roster gets 401
+- [ ] Put `roster.csv` on the persistent volume with `railway volume files upload` (see instructor guide) and set `ROSTER_PATH=/data/roster.csv`; a student on the roster can join, one off the roster gets 401
+- [ ] Confirm the upload path form (`/roster.csv` inside the volume → `/data/roster.csv`) and that uploading works before the first deploy that requires a roster (the server exits at startup without one)
 - [ ] Set `TRUST_PROXY_HOPS=1`; post a message from a known device and confirm the exported `ip_address` is that device's public IP, not Railway's proxy address
 
 ---

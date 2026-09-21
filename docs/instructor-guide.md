@@ -177,7 +177,7 @@ In the Railway dashboard, add these variables to your service:
 | `ROSTER_PATH` | `/data/roster.csv` |
 | `TRUST_PROXY_HOPS` | `1` (confirm; see [What is logged](#what-is-logged)) |
 
-The roster file must exist on the persistent volume at `ROSTER_PATH` before the deploy starts; the server exits at startup without it.
+The roster file must exist on the persistent volume at `ROSTER_PATH` before the deploy starts; the server exits at startup without it. See [Upload the student roster](#upload-the-student-roster).
 
 To change the instructor PIN later, edit `INSTRUCTOR_PIN` and redeploy. The server reads it on every login, so the new PIN takes effect as soon as the deploy goes live.
 
@@ -190,6 +190,25 @@ The SQLite database must survive redeployments. In Railway:
 3. This ensures `DB_PATH=/data/chat.db` points to persistent storage
 
 Without this step, your chat history will be lost on every deploy.
+
+### Upload the student roster
+
+The roster file (`roster.csv`, see [Student roster](#student-roster)) is not in the git repository, so it has to be copied onto the volume with the [Railway CLI](https://docs.railway.com/volumes):
+
+1. Install the Railway CLI, log in, and link the local project directory to your Railway project and service.
+2. Upload the file. The second path is a location inside the volume, so with the volume mounted at `/data`, this file appears at `/data/roster.csv`:
+
+   ```bash
+   railway volume files upload ./data/roster.csv /roster.csv
+   ```
+
+3. Set `ROSTER_PATH=/data/roster.csv` in the Railway variables.
+
+To replace the roster later (for example, after add/drop), upload the new file the same way. The server re-reads the file on every student login, so no redeploy or restart is needed.
+
+To look at the volume's contents, or to upload, download, edit, or delete files interactively, run `railway volume browse /`.
+
+Railway mounts volumes when a service starts, not during the build, so the upload only works while the service has a running container. The server exits at startup when the roster is missing, so on a deployment where the roster is not yet on the volume, upload it before deploying this version of the app, while the previous version is still running. (Not yet tested on this project; see `TODO.md`.)
 
 ### Health check
 
