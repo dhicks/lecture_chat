@@ -10,12 +10,11 @@ Not fixed, but no longer silent: both views now show a connection dot (blue = co
 
 - [ ] Capture DevTools console + Network evidence from the student tab the next time a red dot appears during a real session
 
-### Rate limiting is keyed per IP, not per user
+### Re-tune the `/stream` limit
 
-`@fastify/rate-limit` uses `req.ip` and `server.js` sets no `trustProxy`. Behind Railway's proxy every request carries the proxy's address, so all buckets are shared by the whole class: 5 `/stream` connections/min and 12 messages/min **total**. Same problem for a lecture hall behind campus NAT. Not the cause of the bug above (no 429 in the failing log), but a real production defect.
+Rate limits used to be keyed on `req.ip` alone, so behind Railway's proxy or campus NAT the whole class shared one bucket. Requests with a valid student token are now keyed per student ID (`rateLimitKey` in `server.js`), and `TRUST_PROXY_HOPS` sets the logged IP (default 0). The hop count for Railway has not been confirmed against a real deployed request (see Phase 8 verification).
 
-- [ ] Set `trustProxy` in `server.js` so limits apply per student
-- [ ] Re-tune the `/stream` limit — request count is a poor fit for a long-lived stream
+- [ ] Re-tune the `/stream` limit (5/min per student) — request count is a poor fit for a long-lived stream
 
 ### Smaller gaps found alongside the SSE work
 
@@ -27,6 +26,7 @@ Not fixed, but no longer silent: both views now show a connection dot (blue = co
 ---
 
 ## Phase 5 — Frontend (student)
+- [ ] After sending a message, move focus back to the message input (keyboard and screen reader users otherwise lose their place)
 ### Verify Phase 5
 - [ ] **A11y**: run with a screen reader (VoiceOver on macOS) — new messages announced, reactions announced, poll announced, session-end announced
 
@@ -72,6 +72,9 @@ Not fixed, but no longer silent: both views now show a connection dot (blue = co
 - [ ] `curl https://<deployed-url>/healthz` → 200
 - [ ] Full happy path on production URL: instructor login → start session → student join → message → react → poll → end session
 - [ ] Redeploy (push a trivial commit) → chat history still present after redeploy (confirms persistent volume is working)
+- [ ] Put `roster.csv` on the persistent volume with `railway volume files upload` (see instructor guide) and set `ROSTER_PATH=/data/roster.csv`; a student on the roster can join, one off the roster gets 401
+- [ ] Confirm the upload path form (`/roster.csv` inside the volume → `/data/roster.csv`) and that uploading works before the first deploy that requires a roster (the server exits at startup without one)
+- [ ] Set `TRUST_PROXY_HOPS=1`; post a message from a known device and confirm the exported `ip_address` is that device's public IP, not Railway's proxy address
 
 ---
 

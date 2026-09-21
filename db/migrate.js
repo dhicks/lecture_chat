@@ -3,6 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 
+function addColumnIfMissing(db, table, column, type) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!columns.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
 function migrate(db) {
   const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   db.exec(sql);
@@ -18,6 +25,12 @@ function migrate(db) {
   if (!chatSessionColumns.some(c => c.name === 'chat_disabled')) {
     db.exec('ALTER TABLE chat_sessions ADD COLUMN chat_disabled INTEGER NOT NULL DEFAULT 0');
   }
+
+  // student_id and ip_address were added after the initial schema, for the same
+  // reason. Existing rows keep NULL.
+  addColumnIfMissing(db, 'session_users', 'student_id', 'TEXT');
+  addColumnIfMissing(db, 'messages', 'student_id', 'TEXT');
+  addColumnIfMissing(db, 'messages', 'ip_address', 'TEXT');
 
   db.pragma('foreign_keys = ON');
 }

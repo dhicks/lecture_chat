@@ -36,6 +36,7 @@ before(async () => {
       JWT_SECRET:     'test-integration-secret-xyz',
       PORT:           '0',  // OS picks a free port
       DB_PATH:        TEST_DB,
+      ROSTER_PATH:    path.join(__dirname, 'fixtures', 'roster.csv'),
     },
     stdio: 'pipe',
   });
@@ -106,7 +107,7 @@ async function endSession(iToken) {
 }
 
 async function joinSession(pin, username) {
-  const res = await apiPost('/join', { session_pin: pin, username });
+  const res = await apiPost('/join', { student_id: '1000001', session_pin: pin, username });
   assert.equal(res.status, 200, `join as ${username} should succeed`);
   const { token } = await res.json();
   return token;
@@ -284,11 +285,12 @@ test('C: student receives poll_closed with results after instructor closes poll'
 
 test('E: duplicate username in same session returns 409', async () => {
   // First join succeeds
-  const res1 = await apiPost('/join', { session_pin: sessionPin, username: 'dup-user' });
+  const res1 = await apiPost('/join', { student_id: '1000001', session_pin: sessionPin, username: 'dup-user' });
   assert.equal(res1.status, 200, 'first join should succeed');
 
-  // Second join with same username in same session should be rejected
-  const res2 = await apiPost('/join', { session_pin: sessionPin, username: 'dup-user' });
+  // Second join with same username in same session should be rejected,
+  // even with a different student ID
+  const res2 = await apiPost('/join', { student_id: '1000002', session_pin: sessionPin, username: 'dup-user' });
   assert.equal(res2.status, 409, 'duplicate username should return 409');
   const body = await res2.json();
   assert.ok(body.error, 'response should include an error message');

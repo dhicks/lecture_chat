@@ -59,9 +59,12 @@
 
     .field { display: flex; flex-direction: column; gap: 0.3rem; }
 
+    /* Logging notice: normal-size text in the main text color (not --muted) so it meets WCAG AA contrast */
+    .join-notice { font-size: 0.95rem; color: var(--text); }
+
     label { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
 
-    input[type="text"], textarea {
+    input[type="text"], input[type="password"], textarea {
       width: 100%;
       padding: 0.7rem 0.9rem;
       font-size: 1rem;
@@ -73,7 +76,7 @@
       transition: border-color 0.15s;
     }
 
-    input[type="text"]:focus, textarea:focus {
+    input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(37,99,235,0.2);

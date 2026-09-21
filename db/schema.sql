@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS session_users (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  INTEGER NOT NULL REFERENCES chat_sessions(id),
   username    TEXT NOT NULL,
+  student_id  TEXT,
   joined_at   TEXT DEFAULT (datetime('now')),
   UNIQUE(session_id, username)
 );
@@ -20,6 +21,8 @@ CREATE TABLE IF NOT EXISTS messages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id  INTEGER NOT NULL REFERENCES chat_sessions(id),
   username    TEXT NOT NULL,
+  student_id  TEXT,
+  ip_address  TEXT,
   body        TEXT NOT NULL,
   parent_id   INTEGER REFERENCES messages(id),
   created_at  TEXT DEFAULT (datetime('now'))

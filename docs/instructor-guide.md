@@ -35,6 +35,7 @@ Everything you need to set up, run, and deploy the lecture chat system.
    JWT_SECRET=change-me           # A long random string (see below)
    PORT=80                         # Port the server listens on (80 is the standard HTTP port)
    DB_PATH=./data/chat.db         # Where the SQLite database is stored
+   ROSTER_PATH=./data/roster.csv  # CSV of enrolled student IDs (see "Student roster" below)
    ```
 
    To generate a good `JWT_SECRET`, run:
@@ -45,7 +46,9 @@ Everything you need to set up, run, and deploy the lecture chat system.
 
    Copy the output into your `.env` file.
 
-4. Verify the setup by running the test suites:
+4. Create the student roster (see [Student roster](#student-roster)). The server does not start without it.
+
+5. Verify the setup by running the test suites:
 
    ```bash
    # Unit and integration tests
@@ -56,6 +59,36 @@ Everything you need to set up, run, and deploy the lecture chat system.
    ```
 
    Both should pass with no errors.
+
+---
+
+## Student roster
+
+Students join with their numeric student ID, the session PIN, and a username of their choice. The server checks the ID against a CSV file, `data/roster.csv` by default (change the location with `ROSTER_PATH`). The `data/` directory is not committed to git.
+
+The file needs a header row with a column named `student_id`. Other columns are ignored, so you can export the roster from a spreadsheet as-is:
+
+```
+student_id,name
+1234567,Jane Doe
+0004321,Rick Roe
+```
+
+- IDs are compared as text, so leading zeros matter: `0004321` and `4321` are different IDs.
+- The file is re-read on every student login. To add or remove a student, edit the file; no restart is needed.
+- If the file is missing, empty, or has no `student_id` column, the server exits at startup with an error message.
+
+### What is logged
+
+Each message is saved with the sender's student ID and the IP address of the device that sent it. Both appear in the exported session log (`student_id` and `ip_address` on each message and reply). Students see only usernames. The join screen tells students that their ID and IP address are recorded.
+
+The IP address is the address at the moment the message was sent. Students on the same campus network may share an IP address, and a phone switching between Wi-Fi and cellular changes it. Reactions and poll votes are stored with usernames only.
+
+For the logged IP to be the student's and not the hosting provider's proxy, `TRUST_PROXY_HOPS` must match the number of proxies in front of the server: `0` locally, and on Railway a value that you confirm against a real request (expected: `1`).
+
+### Rate limits
+
+Once a student has joined, limits (12 messages per minute, 5 live-stream connections per minute) apply to that student's ID, not to their IP address. Students who share one IP address, such as a class on campus wifi, do not share a limit. Requests without a valid student token, such as joining and instructor login, are limited per IP address. Joining allows 300 requests per minute per IP address so a whole class can join at the start of a lecture; instructor login allows 5.
 
 ---
 
@@ -92,7 +125,7 @@ Click **Start session**. A 4-digit session PIN appears in large text. This is wh
 
 - Click **Copy PIN** to copy it to your clipboard
 - Paste it into your lecture slides, write it on the board, or project the dashboard itself
-- Students go to your app URL, enter the PIN and a username, and they're in
+- Students go to your app URL, enter their student ID, the PIN, and a username, and they're in
 
 ### 4. Monitor the message feed
 
@@ -141,6 +174,10 @@ In the Railway dashboard, add these variables to your service:
 | `JWT_SECRET` | A long random string (generate one as described in Setup) |
 | `DB_PATH` | `/data/chat.db` |
 | `PORT` | `80` |
+| `ROSTER_PATH` | `/data/roster.csv` |
+| `TRUST_PROXY_HOPS` | `1` (confirm; see [What is logged](#what-is-logged)) |
+
+The roster file must exist on the persistent volume at `ROSTER_PATH` before the deploy starts; the server exits at startup without it. See [Upload the student roster](#upload-the-student-roster).
 
 To change the instructor PIN later, edit `INSTRUCTOR_PIN` and redeploy. The server reads it on every login, so the new PIN takes effect as soon as the deploy goes live.
 
@@ -153,6 +190,25 @@ The SQLite database must survive redeployments. In Railway:
 3. This ensures `DB_PATH=/data/chat.db` points to persistent storage
 
 Without this step, your chat history will be lost on every deploy.
+
+### Upload the student roster
+
+The roster file (`roster.csv`, see [Student roster](#student-roster)) is not in the git repository, so it has to be copied onto the volume with the [Railway CLI](https://docs.railway.com/volumes):
+
+1. Install the Railway CLI, log in, and link the local project directory to your Railway project and service.
+2. Upload the file. The second path is a location inside the volume, so with the volume mounted at `/data`, this file appears at `/data/roster.csv`:
+
+   ```bash
+   railway volume files upload ./data/roster.csv /roster.csv
+   ```
+
+3. Set `ROSTER_PATH=/data/roster.csv` in the Railway variables.
+
+To replace the roster later (for example, after add/drop), upload the new file the same way. The server re-reads the file on every student login, so no redeploy or restart is needed.
+
+To look at the volume's contents, or to upload, download, edit, or delete files interactively, run `railway volume browse /`.
+
+Railway mounts volumes when a service starts, not during the build, so the upload only works while the service has a running container. The server exits at startup when the roster is missing, so on a deployment where the roster is not yet on the volume, upload it before deploying this version of the app, while the previous version is still running. (Not yet tested on this project; see `TODO.md`.)
 
 ### Health check
 
@@ -178,3 +234,5 @@ A `200` response means the server is running.
 | `JWT_SECRET` | Yes | -- | Secret key for signing authentication tokens. Use a long random string. |
 | `PORT` | No | `80` | Port the server listens on. |
 | `DB_PATH` | No | `./data/chat.db` | Path to the SQLite database file. On Railway, set to `/data/chat.db` with a mounted volume. |
+| `ROSTER_PATH` | No | `./data/roster.csv` | CSV file of enrolled students, with a `student_id` column. Re-read on every student login. The file must exist at startup. |
+| `TRUST_PROXY_HOPS` | No | `0` | Number of proxies in front of the server. Determines the client IP that is logged with each message and used to rate-limit requests without a student token. |

@@ -141,7 +141,7 @@ async function messageRoutes(app) {
 
   // POST /message — post a new message or reply
   app.post('/message', { preHandler: requireStudent, config: { rateLimit: { max: 12, timeWindow: '1 minute' } } }, (req, reply) => {
-    const { session_id, username } = req.user;
+    const { session_id, username, student_id } = req.user;
     const { body, parent_id } = req.body || {};
     const db = app.db;
 
@@ -175,8 +175,8 @@ async function messageRoutes(app) {
     }
 
     const result = db.prepare(
-      'INSERT INTO messages (session_id, username, body, parent_id) VALUES (?, ?, ?, ?)'
-    ).run(session_id, username, body.trim(), resolvedParentId);
+      'INSERT INTO messages (session_id, username, student_id, ip_address, body, parent_id) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(session_id, username, student_id, req.ip, body.trim(), resolvedParentId);
 
     const message = db.prepare(
       'SELECT id, session_id, username, body, parent_id, created_at FROM messages WHERE id = ?'
