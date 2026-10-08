@@ -196,7 +196,7 @@ Reactions are toggled: posting the same emoji twice removes it. Counts are aggre
 
 ## Polls
 
-- Instructor creates a poll with a prompt and 2–4 options
+- Instructor creates a poll with a prompt and 2–12 options, entered in one textarea as a Markdown list (`- Option A`, one per line; lines without a bullet are accepted)
 - A `poll_new` SSE event delivers the poll to all connected students
 - Students see a voting card; results are **hidden until the instructor closes the poll**
 - On close, a `poll_closed` event broadcasts the final results to everyone

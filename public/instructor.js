@@ -1,6 +1,7 @@
 import { h, render } from 'https://esm.sh/preact@10';
 import { useState, useEffect, useRef } from 'https://esm.sh/preact@10/hooks';
 import htm from 'https://esm.sh/htm@3';
+import { parseOptions } from './poll-options.js';
 const html = htm.bind(h);
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -434,31 +435,27 @@ function ClosedPollsList({ polls }) {
 
 function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, onPollClosed }) {
   const [prompt, setPrompt]     = useState('');
-  const [options, setOptions]   = useState(['', '']);
+  const [optionsText, setOptionsText] = useState('');
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
-
-  function updateOption(i, val) {
-    setOptions(prev => prev.map((o, idx) => idx === i ? val : o));
-  }
-
-  function addOption() {
-    if (options.length < 12) setOptions(prev => [...prev, '']);
-  }
-
-  function removeOption(i) {
-    if (options.length > 2) setOptions(prev => prev.filter((_, idx) => idx !== i));
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setSuccess('');
     const cleanPrompt  = prompt.trim();
-    const cleanOptions = options.map(o => o.trim()).filter(o => o.length > 0);
+    const cleanOptions = parseOptions(optionsText);
     if (!cleanPrompt) { setError('Please enter a poll question.'); return; }
-    if (cleanOptions.length < 2) { setError('Please provide at least 2 options.'); return; }
+    if (cleanOptions.length < 2 || cleanOptions.length > 12) {
+      setError(`Please provide 2–12 options (found ${cleanOptions.length}).`);
+      return;
+    }
+    const tooLong = cleanOptions.find(o => o.length > 200);
+    if (tooLong) {
+      setError(`Each option must be 200 characters or fewer: "${tooLong.slice(0, 40)}…"`);
+      return;
+    }
     setBusy(true);
     try {
       const data = await apiFetch('/poll', {
@@ -467,7 +464,7 @@ function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, o
         body: { prompt: cleanPrompt, options: cleanOptions },
       });
       setPrompt('');
-      setOptions(['', '']);
+      setOptionsText('');
       setSuccess('Poll created and sent to students.');
       onPollCreated(data.poll);
     } catch (err) {
@@ -501,45 +498,21 @@ function PollPanel({ token, sessionId, activePoll, closedPolls, onPollCreated, o
             />
           </div>
 
-          <fieldset style="border:none; padding:0;">
-            <legend style="font-size:0.9rem; font-weight:600; color:var(--muted); margin-bottom:0.4rem;">
-              Options (2–12)
-            </legend>
-            ${options.map((opt, i) => html`
-              <div key=${i} class="option-row" style="margin-bottom:0.4rem;">
-                <label for=${`option-${i}`} class="sr-only">Option ${i + 1}</label>
-                <input
-                  id=${`option-${i}`}
-                  type="text"
-                  placeholder=${`Option ${i + 1}`}
-                  value=${opt}
-                  onInput=${e => updateOption(i, e.target.value)}
-                  disabled=${busy}
-                  maxlength="200"
-                />
-                ${options.length > 2 && html`
-                  <button
-                    class="btn-icon"
-                    type="button"
-                    aria-label=${`Remove option ${i + 1}`}
-                    onClick=${() => removeOption(i)}
-                    disabled=${busy}
-                  >−</button>
-                `}
-              </div>
-            `)}
-            ${options.length < 12 && html`
-              <button
-                class="btn btn-secondary btn-sm"
-                type="button"
-                onClick=${addOption}
-                disabled=${busy}
-                style="margin-top:0.1rem;"
-              >
-                + Add option
-              </button>
-            `}
-          </fieldset>
+          <div class="field">
+            <label for="poll-options">Options (2–12, one per line)</label>
+            <p id="poll-options-hint" style="font-size:0.85rem; color:var(--muted); margin:0 0 0.3rem;">
+              Enter a Markdown list: start each option with "- ".
+            </p>
+            <textarea
+              id="poll-options"
+              rows="6"
+              placeholder=${'- Option A\n- Option B\n- Option C'}
+              aria-describedby="poll-options-hint"
+              value=${optionsText}
+              onInput=${e => setOptionsText(e.target.value)}
+              disabled=${busy}
+            ></textarea>
+          </div>
 
           ${error && html`
             <div class="alert alert-error" role="alert" aria-live="assertive">${error}</div>
